@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Schema Viewer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .table-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .table-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .table-card h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .table-card .row-count {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .table-card .indexes {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .table-detail {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .table-detail.active { display: block; }
+
+        .table-detail h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .columns-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .columns-table th {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .columns-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .columns-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-pk {
+            background: #667eea;
+            color: white;
+        }
+
+        .badge-notnull {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .back-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        .back-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗄️ Database Schema Viewer</h1>
+        <p>Interactive schema browser for unified_country_database.db</p>
+    </div>
+
+    <div class="container">
+        <div id="tableList" class="table-list">
+
+            <div class="table-card" onclick="showTable('climate_monthly')">
+                <h3>climate_monthly</h3>
+                <div class="row-count">291 rows • 41 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_climate_country</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('countries')">
+                <h3>countries</h3>
+                <div class="row-count">246 rows • 90 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_countries_iso3</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_climate')">
+                <h3>tugo_climate</h3>
+                <div class="row-count">584 rows • 4 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_climate_iso2</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_entry')">
+                <h3>tugo_entry</h3>
+                <div class="row-count">1,285 rows • 4 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_entry_iso2</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_health')">
+                <h3>tugo_health</h3>
+                <div class="row-count">4,547 rows • 5 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_health_iso2</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_laws')">
+                <h3>tugo_laws</h3>
+                <div class="row-count">2,048 rows • 4 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_laws_iso2</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_offices')">
+                <h3>tugo_offices</h3>
+                <div class="row-count">359 rows • 8 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_offices_iso2</div>
+
+            </div>
+
+            <div class="table-card" onclick="showTable('tugo_safety')">
+                <h3>tugo_safety</h3>
+                <div class="row-count">1,757 rows • 4 columns</div>
+
+                <div class="indexes">📊 Indexes: idx_tugo_safety_iso2</div>
+
+            </div>
+
+        </div>
+
+        <div id="detail-climate_monthly" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>climate_monthly</h2>
+            <p><strong>Rows:</strong> 291</p>
+
+            <p><strong>Indexes:</strong> idx_climate_country</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>country_name_climate</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_avg_temp_c</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_avg_cloud_pct</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_total_precip_mm</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_avg_monthly_precip_mm</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_1</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_1</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_1</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_2</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_2</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_2</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_3</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_3</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_3</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_4</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_4</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_4</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_5</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_5</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_5</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_6</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_6</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_6</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_7</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_7</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_7</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_8</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_8</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_8</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_9</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_9</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_9</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_10</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_10</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_10</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_11</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_11</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_11</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_temp_month_12</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_cloud_month_12</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>climate_precip_month_12</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-countries" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>countries</h2>
+            <p><strong>Rows:</strong> 246</p>
+
+            <p><strong>Indexes:</strong> idx_countries_iso3</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso3</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>numeric_code</strong></td>
+                        <td>INTEGER</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>iso_3166_2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>pli_ppp</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>pli_exchange_rate</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>pli_PLI</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>pli_EuroValue</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1960</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1961</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1962</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1963</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1964</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1965</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1966</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1967</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1968</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1969</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1970</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1971</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1972</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1973</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1974</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1975</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1976</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1977</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1978</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1979</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1980</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1981</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1982</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1983</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1984</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1985</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1986</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1987</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1988</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1989</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1990</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1991</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1992</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1993</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1994</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1995</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1996</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1997</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1998</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_1999</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2000</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2001</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2002</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2003</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2004</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2005</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2006</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2007</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2008</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2009</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2010</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2011</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2012</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2013</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2014</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2015</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2016</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2017</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2018</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2019</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2020</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2021</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2022</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2023</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>exchange_rate_2024</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_advisory_state</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_advisory_text</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_has_warning</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_has_regional</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_published_date</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_recent_updates</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>tugo_advisories_desc</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_content_id</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_title</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_last_modified_iso</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_effective_iso</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_warning</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_partial_warning</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_situation_warning</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>fo_situation_part_warning</strong></td>
+                        <td>REAL</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_climate" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_climate</h2>
+            <p><strong>Rows:</strong> 584</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_climate_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>category</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>description</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_entry" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_entry</h2>
+            <p><strong>Rows:</strong> 1,285</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_entry_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>category</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>description</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_health" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_health</h2>
+            <p><strong>Rows:</strong> 4,547</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_health_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>disease_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>category</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>description</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_laws" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_laws</h2>
+            <p><strong>Rows:</strong> 2,048</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_laws_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>category</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>description</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_offices" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_offices</h2>
+            <p><strong>Rows:</strong> 359</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_offices_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>office_type</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>city</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>address</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>phone</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>email</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>website</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div id="detail-tugo_safety" class="table-detail">
+            <button class="back-btn" onclick="showList()">← Back to Tables</button>
+            <h2>tugo_safety</h2>
+            <p><strong>Rows:</strong> 1,757</p>
+
+            <p><strong>Indexes:</strong> idx_tugo_safety_iso2</p>
+
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraints</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td><strong>iso2</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>country_name</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>category</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>description</strong></td>
+                        <td>TEXT</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        function showTable(tableName) {
+            document.getElementById('tableList').style.display = 'none';
+            document.querySelectorAll('.table-detail').forEach(el => el.classList.remove('active'));
+            document.getElementById('detail-' + tableName).classList.add('active');
+        }
+
+        function showList() {
+            document.getElementById('tableList').style.display = 'grid';
+            document.querySelectorAll('.table-detail').forEach(el => el.classList.remove('active'));
+        }
+    </script>
+</body>
+</html>
