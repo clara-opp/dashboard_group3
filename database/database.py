@@ -343,6 +343,98 @@ def load_unesco_by_country_data():
     
     return df
 
+def load_pictures_data():
+    """
+    Load Unsplash pictures. 
+    If json missing, run the fetch script.
+    Flattens the 3 images into separate columns.
+    """
+    filename = 'pictures.json'
+    
+    try:
+        filepath = get_data_path(filename)
+        print(f"  Loading pictures from: {filepath}")
+    except FileNotFoundError:
+        print("  ⚠️ pictures.json not found. Attempting to fetch from Unsplash...")
+        try:
+            from unsplash_api import fetch_country_images
+            fetch_country_images()
+            filepath = get_data_path(filename)
+        except Exception as e:
+            print(f"  ❌ Error fetching images: {e}")
+            return pd.DataFrame()
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        if not data:
+            return pd.DataFrame()
+
+        # Flatten the nested JSON into a flat dictionary for DataFrame
+        flattened_records = []
+        for entry in data:
+            record = {'iso3': entry['iso3']}
+            
+            # Extract up to 3 images
+            images = entry.get('images', [])
+            for i in range(3): # 0, 1, 2
+                if i < len(images):
+                    # Columns: img_1, credit_1, img_2, credit_2, ...
+                    suffix = str(i + 1)
+                    img = images[i]
+                    record[f'img_{suffix}'] = img.get('image_url')
+                    record[f'credit_{suffix}'] = img.get('photographer_name')
+                    record[f'credit_url_{suffix}'] = img.get('photographer_url')
+                else:
+                    # Fill empty if less than 3 images found
+                    suffix = str(i + 1)
+                    record[f'img_{suffix}'] = None
+                    record[f'credit_{suffix}'] = None
+                    record[f'credit_url_{suffix}'] = None
+            
+            flattened_records.append(record)
+
+        df = pd.DataFrame(flattened_records)
+        df = df.set_index('iso3')
+        return df
+        
+    except Exception as e:
+        print(f"  ❌ Error reading pictures.json: {e}")
+        return pd.DataFrame()
+
+def load_airports_data():
+    """
+    Load Airport data using the amadeus_api script.
+    """
+    try:
+        # Assumes amadeus_api.py is in the same directory
+        from amadeus_api import load_airport_data
+        return load_airport_data()
+    except ImportError:
+        print("  ⚠️ amadeus_api.py not found. Skipping airports.")
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"  ❌ Error loading airports: {e}")
+        return pd.DataFrame()
+
+def load_flight_network_data(airports_df):
+    """
+    Load Flight Cost data. Relies on airports_df to determine routes.
+    """
+    if airports_df.empty:
+        print("  ⚠️ No airport data available. Skipping flight network.")
+        return pd.DataFrame()
+
+    try:
+        from fetch_route_prices import get_flight_network_data
+        return get_flight_network_data(airports_df)
+    except ImportError:
+        print("  ⚠️ fetch_route_prices.py not found. Skipping flight network.")
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"  ❌ Error loading flight network: {e}")
+        return pd.DataFrame()
 
 def create_unified_database(output_db='unified_country_database.db'):
     """Create a unified database from all data sources."""
@@ -376,6 +468,16 @@ def create_unified_database(output_db='unified_country_database.db'):
     print("  - UNESCO by country summary")
     unesco_by_country_df = load_unesco_by_country_data()
 
+    print("  - Unsplash Country Pictures")
+    pictures_df = load_pictures_data()
+
+    print("  - Airports Data (OpenTravelData + Rankings)")
+    airports_df = load_airports_data()
+
+    print("  - Flight Network (Prices from US/DE)")
+    # We pass the airports_df we just loaded so the script knows the top airports
+    flight_costs_df = load_flight_network_data(airports_df)
+
     print("\nMerging datasets on ISO3 country codes...")
 
     unified_df = iso_df.copy()
@@ -387,6 +489,9 @@ def create_unified_database(output_db='unified_country_database.db'):
 
     if not fo_df.empty:
         unified_df = unified_df.join(fo_df, how='left')
+
+    if not pictures_df.empty:
+        unified_df = unified_df.join(pictures_df, how='left')
 
     unified_df = unified_df.reset_index()
 
@@ -421,6 +526,20 @@ def create_unified_database(output_db='unified_country_database.db'):
     else:
         print("  * 'unesco_by_country' table skipped (no data)")
 
+    # Save Airports table
+    if not airports_df.empty:
+        airports_df.to_sql('airports', conn, if_exists='replace', index=False)
+        print(f"  ✓ 'airports' table: {len(airports_df)} rows")
+    else:
+        print("  ⚠️ 'airports' table skipped (no data)")
+
+    # Save Flight Costs table
+    if not flight_costs_df.empty:
+        flight_costs_df.to_sql('flight_costs', conn, if_exists='replace', index=False)
+        print(f"  ✓ 'flight_costs' table: {len(flight_costs_df)} rows")
+    else:
+        print("  ⚠️ 'flight_costs' table skipped (no data)")
+
     # CRITICAL: Save TuGo detail tables
     if tugo_detail_dfs:
         for table_name, df in tugo_detail_dfs.items():
@@ -446,6 +565,13 @@ def create_unified_database(output_db='unified_country_database.db'):
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_unesco_id ON unesco_heritage_sites(id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_unesco_by_country_iso_code ON unesco_by_country(iso_code)')
 
+    # Indexes for Airports
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_airports_iata ON airports(iata_code)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_airports_iso2 ON airports(iso2)')
+
+    # Indexes for Flight Costs
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_flights_origin ON flight_costs(origin)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_flights_dest ON flight_costs(destination)')
 
     conn.commit()
     print(f"  ✓ Indexes created")
@@ -460,6 +586,10 @@ def create_unified_database(output_db='unified_country_database.db'):
     print(f"  - climate_monthly ({len(climate_df)} rows)")
     print(f"  - unesco_heritage_sites ({len(unesco_df)} rows)")
     print(f"  - unesco_by_country ({len(unesco_by_country_df)} rows)")
+    if not airports_df.empty:
+        print(f"  - airports ({len(airports_df)} rows)")
+    if not flight_costs_df.empty:
+        print(f"  - flight_costs ({len(flight_costs_df)} rows)")
     if tugo_detail_dfs:
         for table_name, df in tugo_detail_dfs.items():
             if not df.empty:

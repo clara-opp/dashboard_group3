@@ -39,7 +39,7 @@ def search_flight_offers(access_token, flight_params):
         "max": 5
      }
     # Add optional parameters if they exist
-    for param in ["children", "infants", "nonStop"]:
+    for param in ["children", "infants", "nonStop", "travelClass", "returnDate"]:
         if param in flight_params:
             # Amadeus API expects booleans as lowercase strings ('true'/'false')
             if param == "nonStop":

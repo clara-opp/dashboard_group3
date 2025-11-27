@@ -71,7 +71,8 @@ def extract_flight_info_with_gpt(conversation_history):
     - Use `departureDate` for single dates, or `startDate` and `endDate` for ranges. Dates must be 'YYYY-MM-DD'.
     - Use `adults`, `children`, and `infants` for traveler counts.
     - If the user wants a direct flight, include `"nonStop": true`.
-
+    - For travel class, use `travelClass` with one of the following values: "ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST". Default to "ECONOMY" if not specified.
+    
     ## Date Calculation Logic:
     - You are provided with today's date.
     - You MUST use this date to calculate the exact date for relative user requests (e.g., 'tomorrow', 'next Saturday', 'in 3 weeks').
@@ -190,6 +191,15 @@ def process_flight_offers_to_df(flight_offers_data):
             if match.group(2): minutes = int(match.group(2)[:-1])
         total_duration_obj = datetime.timedelta(hours=hours, minutes=minutes)
 
+        # --- Extract Travel Class ---
+        travel_class = "UNKNOWN" # Default value
+        try:
+            # Path: offer -> travelerPricings (list) -> first traveler -> fareDetailsBySegment (list) -> first segment -> cabin
+            travel_class = offer['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
+        except (KeyError, IndexError):
+            # If the data structure is not as expected, we keep the default
+            pass
+
         flights.append({
             "Origin": st.session_state.iata_to_city.get(first_segment['departure']['iataCode'], first_segment['departure']['iataCode']),
             "Destination": st.session_state.iata_to_city.get(last_segment['arrival']['iataCode'], last_segment['arrival']['iataCode']),
@@ -197,6 +207,7 @@ def process_flight_offers_to_df(flight_offers_data):
             "Arrival": pd.to_datetime(last_segment['arrival']['at']),     # Keep as datetime object
             "Duration": total_duration_obj, # Keep as timedelta object
             "Carrier": carriers.get(first_segment["carrierCode"], "N/A"),
+            "Travel_Class": travel_class,
             "Layovers": num_layovers,
             "Layovers_Info": layovers_info, # dictionary
             "Segments": segments, # Add the full segments list for detailed display
@@ -247,8 +258,9 @@ def search_flights(flight_params, initial_query=None):
         # --- Prepare for multi-airport and multi-date search ---
         origins = flight_params.get("originLocationCode", [])
         destinations = flight_params.get("destinationLocationCode", [])
-        start_date_str = flight_params.get("departureDate")
-        end_date_str = flight_params.get("endDate", start_date_str)
+        # Handle both single date ("departureDate") and date range ("startDate", "endDate")
+        start_date_str = flight_params.get("startDate") or flight_params.get("departureDate")
+        end_date_str = flight_params.get("endDate") or start_date_str
 
         # Ensure origins and destinations are lists
         if not isinstance(origins, list): origins = [origins]
@@ -286,6 +298,22 @@ def search_flights(flight_params, initial_query=None):
                     time.sleep(0.2) # Respect API rate limits
             current_date += datetime.timedelta(days=1)
         flight_offers = all_flight_offers_data
+
+        # Post-filter the results to strictly match the requested travel class, if specified.
+        # This corrects the Amadeus API's behavior of sometimes returning lower cabin classes.
+        requested_class = flight_params.get("travelClass")
+        if requested_class and flight_offers.get("data"):
+            strict_offers = []
+            for offer in flight_offers["data"]:
+                try:
+                    # Check the cabin class of the first segment for the first traveler
+                    offer_class = offer['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
+                    if offer_class == requested_class:
+                        strict_offers.append(offer)
+                except (KeyError, IndexError):
+                    pass # If the offer has a strange format, ignore it
+            flight_offers["data"] = strict_offers
+        
         if flight_offers and flight_offers.get("data"):
             st.session_state.flight_offers_data = flight_offers
             df = process_flight_offers_to_df(flight_offers)
@@ -419,6 +447,10 @@ if st.session_state.view_state == 'search':
             children = cols[1].number_input("Children < 12 years", min_value=0, value=0)
             infants = cols[2].number_input("Infants < 2 years", min_value=0, value=0)
             non_stop = st.checkbox("Direct flights only", value=False)
+            travel_class = st.selectbox(
+                "Travel Class",
+                ("ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST")
+            )
             submitted = st.form_submit_button("Search Flights")
             if submitted:
                 if not origin_display or not destination_display:
@@ -441,7 +473,8 @@ if st.session_state.view_state == 'search':
                         "adults": adults, 
                         "children": children, 
                         "infants": infants,
-                        "nonStop": non_stop
+                        "nonStop": non_stop,
+                        "travelClass": travel_class
                     }
                     search_flights(manual_params)
 
@@ -508,6 +541,11 @@ elif st.session_state.view_state == 'results':
             "Airlines", options=carrier_options, default=carrier_options
         )
 
+        class_options = sorted(df_for_filters['Travel_Class'].unique())
+        selected_classes = st.multiselect(
+            "Travel Class", options=class_options, default=class_options
+        )
+
         st.write("---")
         st.write("**Sorting Options**")
         sort_col1, sort_col2 = st.columns(2)
@@ -536,6 +574,7 @@ elif st.session_state.view_state == 'results':
             (filtered_df['Duration'] <= pd.to_timedelta(max_duration_hours, unit='h')) &
             (filtered_df['Layovers'].isin(selected_layovers)) &
             (filtered_df['Carrier'].isin(selected_carriers)) &
+            (filtered_df['Travel_Class'].isin(selected_classes)) &
             (filtered_df['Departure'].dt.time >= start_time_range[0]) &
             (filtered_df['Departure'].dt.time <= start_time_range[1]) &
             (filtered_df['Arrival'].dt.time >= end_time_range[0]) &
@@ -572,6 +611,7 @@ elif st.session_state.view_state == 'results':
                     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp; &darr; *Flight duration: {format_duration(pd.to_timedelta(segments[-1]['duration']))}*")
                     st.markdown(f"**`{pd.to_datetime(segments[-1]['arrival']['at']).strftime('%H:%M')}`** arrival at **{st.session_state.iata_to_city.get(segments[-1]['arrival']['iataCode'])}** ({segments[-1]['arrival']['iataCode']})")
                 with col2:
+                    st.markdown(f"**Class:**\n_{row['Travel_Class'].replace('_', ' ').title()}_")
                     st.markdown(f"**Carrier:**\n_{row['Carrier']}_")
                     if row['Layovers'] == 0:
                         st.markdown("**Layovers:**\n_Direct_")

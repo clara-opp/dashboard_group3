@@ -1,0 +1,16 @@
+### APIs ###
+
+# Amadeus APIs #
+- Flight Offers Search
+- Fligh Offers Price
+- Flight Create Orders
+
+# Others  #
+- Google Cloud API
+- OpenAI API
+
+### Datasets ###
+- OpenTravelData (Github)
+ 
+### Scraping ###
+- https://gettocenter.com/airports/top-100-airports-in-world
