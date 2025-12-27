@@ -1,0 +1,50 @@
+{
+  "aries": {
+    "sign": "aries",
+    "horoscope": "You are continuously learning and evolving in your role., Aries. In moments of stress, remember that taking care of yourself matters."
+  },
+  "taurus": {
+    "sign": "taurus",
+    "horoscope": "At times, challenges remind you of your capacity to adapt and overcome., Taurus. Your professional life is a blend of persistence and opportunity."
+  },
+  "gemini": {
+    "sign": "gemini",
+    "horoscope": "You trust that each challenge you overcome makes you more resilient., Gemini. You sometimes find yourself brimming with innovative ideas."
+  },
+  "cancer": {
+    "sign": "cancer",
+    "horoscope": "There are moments when you feel truly understood by someone special., Cancer. There are moments when you’re pleasantly surprised by how far you’ve come."
+  },
+  "leo": {
+    "sign": "leo",
+    "horoscope": "Sometimes, a new opportunity appears just when you need it., Leo. A simple change in perspective can brighten your entire day."
+  },
+  "virgo": {
+    "sign": "virgo",
+    "horoscope": "Taking time for yourself is a sign of strength, not weakness., Virgo. At times, you balance hope with caution as you move ahead."
+  },
+  "libra": {
+    "sign": "libra",
+    "horoscope": "At times, the trials you endure reveal the depth of your inner strength., Libra. There are moments when you question your abilities, yet you keep moving forward."
+  },
+  "scorpio": {
+    "sign": "scorpio",
+    "horoscope": "There are moments when obstacles appear insurmountable, but you persevere., Scorpio. Your unique qualities make you stand out in your own way."
+  },
+  "sagittarius": {
+    "sign": "sagittarius",
+    "horoscope": "There are moments when you question your abilities, yet you keep moving forward., Sagittarius. There are days when you sense an unspoken bond with someone close."
+  },
+  "capricorn": {
+    "sign": "capricorn",
+    "horoscope": "Taking risks sometimes leads to unexpected rewards., Capricorn. You often experience moments of connection that feel meant to be."
+  },
+  "aquarius": {
+    "sign": "aquarius",
+    "horoscope": "Sometimes, challenges become stepping stones on your path of evolution., Aquarius. Sometimes, difficulties lead to unexpected personal growth."
+  },
+  "pisces": {
+    "sign": "pisces",
+    "horoscope": "You wonder how past events have subtly influenced who you are., Pisces. You sometimes find yourself brimming with innovative ideas."
+  }
+}
