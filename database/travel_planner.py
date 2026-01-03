@@ -790,6 +790,50 @@ def show_dashboard_step():
         st.session_state.step = 4
         st.rerun()
 
+def show_results_step():
+    st.markdown("### Step 6: Your Top Destinations!")
+    with st.spinner("Analyzing the globe to find your perfect spot..."):
+        df_base = data_manager.load_base_data(st.session_state.get('origin_iata', 'FRA'))
+        matcher = TravelMatcher(df_base)
+        st.session_state.matched_df = matcher.calculate_match(st.session_state.weights, st.session_state.prefs)
+
+    df = st.session_state.matched_df
+    top_5 = df.head(5)
+    
+    st.balloons()
+    st.success(f"**Your #1 Match: {top_5.iloc[0]['country_name']}**")
+    
+    for i, row in top_5.iterrows():
+        with st.container():
+            st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns([1.5, 2, 1])
+            with c1:
+                img_url = row[random.choice(['img_1', 'img_2', 'img_3'])]
+                if img_url:
+                    st.image(img_url, use_container_width=True)
+            with c2:
+                st.markdown(f"#### {i+1}. {row['country_name']}")
+                score = row['final_score'] / sum(st.session_state.weights.values()) * 100
+                st.markdown(f"**Match Score:** <span style='color:green; font-weight:bold'>{score:.0f}%</span>", unsafe_allow_html=True)
+                if pd.notnull(row['flight_price']):
+                    # Convert database EUR estimate to local currency
+                    rate = st.session_state.get('currency_rate', 1.0)
+                    symbol = st.session_state.get('currency_symbol', '€')
+                    converted_price = row['flight_price'] * rate
+                    tooltip = f"Two-way flight from {row['flight_origin']} to {row['flight_dest']}"
+                    st.markdown(f"✈️ Est. Flight: **{symbol}{converted_price:.0f}**", help=tooltip)
+            with c3:
+                if st.button("View Details", key=f"details_{row['iso2']}"):
+                    st.session_state.selected_country = row
+                    st.session_state.step = 5
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+    if st.button("Start Over"):
+        st.session_state.clear()
+        st.rerun()
+
+
 def show_booking_step():
     st.header("Confirm Your Booking")
     offer = st.session_state.priced_offer
