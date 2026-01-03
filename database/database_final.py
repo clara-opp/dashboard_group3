@@ -544,13 +544,16 @@ def load_tarot_travel_database() -> pd.DataFrame:
     # Process Minor Arcana
     for suit, cards in tarot_data.get("minor_arcana", {}).items():
         for card in cards:
+            # Handle missing 'id' field - use sequence as fallback
+            card_id = card.get("id") or card.get("sequence")
+            
             for orientation in ["upright", "reversed"]:
                 card_info = card.get(orientation, {})
                 countries = card_info.get("countries", [])
                 
                 for country in countries:
                     tarot_records.append({
-                        "card_id": card["id"],
+                        "card_id": card_id,
                         "card_name": card["name"],
                         "arcana_type": f"minor_{suit}",
                         "orientation": orientation,
@@ -561,6 +564,7 @@ def load_tarot_travel_database() -> pd.DataFrame:
                         "travel_meaning": card_info.get("travel_meaning", ""),
                         "travel_style": card_info.get("travel_style", ""),
                     })
+
 
     df = pd.DataFrame(tarot_records)
     print(f"  Loaded {len(df)} tarot-country associations")
