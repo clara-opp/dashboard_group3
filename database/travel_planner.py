@@ -440,116 +440,88 @@ def show_swiping_step():
 
 def show_astro_step():
     st.markdown("### Step 4: A Final Touch of Destiny? ✨")
-    
     st.markdown("#### 🃏 Draw Your Mystical Travel Card")
     
-    if st.button("Draw Tarot Card", use_container_width=True, key="draw_tarot"):
+    if st.button("Draw Tarot Card", width='stretch', key="draw_tarot"):
         try:
-            # API Call für Tarot-Karte
-            api_key = os.getenv("ROXY_API_KEY")
-            tarot_url = "https://roxyapi.com/api/v1/data/astro/tarot"
-            url = f"{tarot_url}/single-card-draw?token={api_key}&reversed_probability=0.3"
-            
-            response = requests.get(url)
+            # 🌙 Spinner mit Astrologie-Text
+            with st.spinner("🌙 Reading the cosmic energies... ✨"):
+                api_key = os.getenv("ROXY_API_KEY")
+                tarot_url = "https://roxyapi.com/api/v1/data/astro/tarot"
+                url = f"{tarot_url}/single-card-draw?token={api_key}&reversed_probability=0.3"
+                
+                response = requests.get(url, timeout=15)
             
             if response.status_code == 200:
                 card_data = response.json()
                 card_name = card_data.get("name", "Unknown Card")
                 is_reversed = card_data.get("is_reversed", False)
                 card_image = card_data.get("image", "")
+                meaning = card_data.get("meaning", "")
+                reversed_meaning = card_data.get("reversed_meaning", "")
                 
-                # Länder aus Datenbank holen
-                conn = sqlite3.connect("unified_country_database.db")
-                cursor = conn.cursor()
+                # ⚡ DB-Query
+                travel_data = None
+                try:
+                    conn = sqlite3.connect("unified_country_database.db")
+                    cursor = conn.cursor()
+                    orientation = "reversed" if is_reversed else "upright"
+                    cursor.execute("""
+                        SELECT travel_meaning
+                        FROM tarot_countries 
+                        WHERE card_name = ? AND orientation = ?
+                        LIMIT 1
+                    """, (card_name, orientation))
+                    travel_data = cursor.fetchone()
+                    conn.close()
+                except:
+                    pass
                 
-                orientation = "reversed" if is_reversed else "upright"
-                cursor.execute("""
-                    SELECT DISTINCT country_code, country_name, reason 
-                    FROM tarot_countries 
-                    WHERE card_name = ? AND orientation = ?
-                """, (card_name, orientation))
+                # ✅ Set astro weight to 0.2 (20%)
+                st.session_state["weights"]["astro"] = 0.2
+                st.session_state["tarot_drawn"] = True
+                st.session_state["tarot_card"] = card_name
                 
-                results = cursor.fetchall()
-                conn.close()
-                
-                if results:
-                    # Länder speichern
-                    tarot_countries = [row[0] for row in results]
-                    st.session_state["tarot_countries"] = tarot_countries
-                    st.session_state["weights"]["astro"] = 0.2
+                # 🎨 UI
+                with st.container(border=True):
+                    st.markdown(f"## ✨ {card_name}")
                     
-                    # UI: Karte anzeigen
-                    orientation_text = "🔄 Reversed" if is_reversed else "⬆️ Upright"
-                    st.success(f"✨ **{card_name}** ({orientation_text})")
+                    col1, col2 = st.columns([1, 1.5])
                     
-                    if card_image:
-                        col1, col2, col3 = st.columns([1, 2, 1])
-                        with col2:
-                            st.image(card_image, width=200)
+                    with col1:
+                        if card_image:
+                            st.image(card_image, width=180)
                     
-                    # Empfohlene Länder anzeigen
-                    st.markdown("#### 🌍 Recommended Destinations:")
-                    for country_code, country_name, reason in results:
-                        st.write(f"**{country_name}** ({country_code})")
-                        st.caption(f"_{reason}_")
-                else:
-                    st.warning(f"Card '{card_name}' found but no countries in tarot database.")
-                    st.session_state["tarot_countries"] = []
+                    with col2:
+                        if is_reversed:
+                            st.markdown("🔄 **REVERSED** – Inverted energy")
+                        else:
+                            st.markdown("⬆️ **UPRIGHT** – Direct manifestation")
+                        
+                        st.divider()
+                        
+                        st.markdown("**📖 Meaning**")
+                        st.caption(reversed_meaning if is_reversed else meaning)
+                        
+                        if travel_data and travel_data[0]:
+                            st.divider()
+                            st.markdown("**✈️ Travel Significance**")
+                            st.caption(travel_data[0])
             else:
                 st.error(f"API Error: {response.status_code}")
                 
+        except requests.exceptions.Timeout:
+            st.error("⏱️ API Timeout (15s) - Try again.")
         except Exception as e:
-            st.error(f"Error drawing tarot card: {str(e)}")
+            st.error(f"Error: {str(e)}")
     
     st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
 
-    if st.button("Calculate My Matches! 🚀", use_container_width=True):
+    if st.button("Calculate My Matches! 🚀", width='stretch'):
         st.session_state.step = 4
         st.rerun()
 
 
-def show_results_step():
-    st.markdown("### Step 6: Your Top Destinations!")
-    with st.spinner("Analyzing the globe to find your perfect spot..."):
-        df_base = data_manager.load_base_data(st.session_state.get('origin_iata', 'FRA'))
-        matcher = TravelMatcher(df_base)
-        st.session_state.matched_df = matcher.calculate_match(st.session_state.weights, st.session_state.prefs)
-
-    df = st.session_state.matched_df
-    top_5 = df.head(5)
-    
-    st.balloons()
-    st.success(f"**Your #1 Match: {top_5.iloc[0]['country_name']}**")
-    
-    for i, row in top_5.iterrows():
-        with st.container():
-            st.markdown(f"<div class='card'>", unsafe_allow_html=True)
-            c1, c2, c3 = st.columns([1.5, 2, 1])
-            with c1:
-                img_url = row[random.choice(['img_1', 'img_2', 'img_3'])]
-                if img_url:
-                    st.image(img_url, use_container_width=True)
-            with c2:
-                st.markdown(f"#### {i+1}. {row['country_name']}")
-                score = row['final_score'] / sum(st.session_state.weights.values()) * 100
-                st.markdown(f"**Match Score:** <span style='color:green; font-weight:bold'>{score:.0f}%</span>", unsafe_allow_html=True)
-                if pd.notnull(row['flight_price']):
-                    # Convert database EUR estimate to local currency
-                    rate = st.session_state.get('currency_rate', 1.0)
-                    symbol = st.session_state.get('currency_symbol', '€')
-                    converted_price = row['flight_price'] * rate
-                    tooltip = f"Two-way flight from {row['flight_origin']} to {row['flight_dest']}"
-                    st.markdown(f"✈️ Est. Flight: **{symbol}{converted_price:.0f}**", help=tooltip)
-            with c3:
-                if st.button("View Details", key=f"details_{row['iso2']}"):
-                    st.session_state.selected_country = row
-                    st.session_state.step = 5
-                    st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-    if st.button("Start Over"):
-        st.session_state.clear()
-        st.rerun()
 
 def show_dashboard_step():
     country = st.session_state.selected_country
@@ -560,12 +532,12 @@ def show_dashboard_step():
     details = data_manager.get_country_details(country['iso2'])
     with tab1: 
         st.info(f"Advisory: {country['tugo_advisory_state']}")
-        if not details['safety'].empty: st.dataframe(details['safety'], use_container_width=True)
+        if not details['safety'].empty: st.dataframe(details['safety'], width='stretch')
     with tab2:
-        st.write("#### Vaccinations & Diseases"); st.dataframe(details['health'], use_container_width=True)
+        st.write("#### Vaccinations & Diseases"); st.dataframe(details['health'], width='stretch')
     with tab3:
         st.metric("UNESCO World Heritage Sites", country['unesco_count'])
-        if not details['unesco'].empty: st.dataframe(details['unesco'], use_container_width=True)
+        if not details['unesco'].empty: st.dataframe(details['unesco'], width='stretch')
     with tab4:
         st.metric("Price Level Index (Lower is Cheaper)", f"{country['pli_ppp']:.2f}")
     with tab5:
@@ -873,6 +845,50 @@ def show_dashboard_step():
     if st.button("← Back to Results"):
         st.session_state.step = 4
         st.rerun()
+
+def show_results_step():
+    st.markdown("### Step 6: Your Top Destinations!")
+    with st.spinner("Analyzing the globe to find your perfect spot..."):
+        df_base = data_manager.load_base_data(st.session_state.get('origin_iata', 'FRA'))
+        matcher = TravelMatcher(df_base)
+        st.session_state.matched_df = matcher.calculate_match(st.session_state.weights, st.session_state.prefs)
+
+    df = st.session_state.matched_df
+    top_5 = df.head(5)
+    
+    st.balloons()
+    st.success(f"**Your #1 Match: {top_5.iloc[0]['country_name']}**")
+    
+    for i, row in top_5.iterrows():
+        with st.container():
+            st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns([1.5, 2, 1])
+            with c1:
+                img_url = row[random.choice(['img_1', 'img_2', 'img_3'])]
+                if img_url:
+                    st.image(img_url, use_container_width=True)
+            with c2:
+                st.markdown(f"#### {i+1}. {row['country_name']}")
+                score = row['final_score'] / sum(st.session_state.weights.values()) * 100
+                st.markdown(f"**Match Score:** <span style='color:green; font-weight:bold'>{score:.0f}%</span>", unsafe_allow_html=True)
+                if pd.notnull(row['flight_price']):
+                    # Convert database EUR estimate to local currency
+                    rate = st.session_state.get('currency_rate', 1.0)
+                    symbol = st.session_state.get('currency_symbol', '€')
+                    converted_price = row['flight_price'] * rate
+                    tooltip = f"Two-way flight from {row['flight_origin']} to {row['flight_dest']}"
+                    st.markdown(f"✈️ Est. Flight: **{symbol}{converted_price:.0f}**", help=tooltip)
+            with c3:
+                if st.button("View Details", key=f"details_{row['iso2']}"):
+                    st.session_state.selected_country = row
+                    st.session_state.step = 5
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+    if st.button("Start Over"):
+        st.session_state.clear()
+        st.rerun()
+
 
 def show_booking_step():
     st.header("Confirm Your Booking")
