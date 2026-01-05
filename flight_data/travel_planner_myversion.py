@@ -1006,7 +1006,7 @@ def show_confirmation_step():
 # 5. MAIN APP ROUTER
 # ==========================================
 def run_app():
-        # Handle Google OAuth Redirect
+    # Handle Google OAuth Redirect
     q = st.query_params
     if "code" in q and 'google_creds' not in st.session_state:
         flow = calendar_client.get_google_flow(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI)
