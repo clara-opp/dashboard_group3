@@ -700,6 +700,45 @@ def load_flight_network_data(airports_df: pd.DataFrame) -> pd.DataFrame:
         print(f"  [ERROR] Error loading flight network: {e}")
         return pd.DataFrame()
 
+# ======================================================================
+# Equality Index Data
+# ======================================================================
+
+
+def load_equality_index_data() -> pd.DataFrame:
+    """Load LGBT Equality Index scores (indexed by iso3)."""
+    try:
+        filepath = get_data_path("equality_index_data.json")
+    except FileNotFoundError:
+        print("  [INFO] equality_index_data.json not found, skipping Equality Index data.")
+        return pd.DataFrame()
+
+    print(f"  Loading Equality Index data from: {filepath}")
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    records = []
+    for entry in data:
+        records.append({
+            "iso2": entry.get("region_id"),
+            "equality_index_score": entry.get("ei"),
+            "equality_index_legal": entry.get("ei_legal"),
+            "equality_index_public_opinion": entry.get("ei_po"),
+            "equality_index_rank": entry.get("rank"),
+        })
+
+    df = pd.DataFrame(records)
+    
+    # Map iso2 to iso3
+    iso_map = load_iso_codes().reset_index()[["iso2", "iso3"]]
+    df = df.merge(iso_map, on="iso2", how="left")
+    df = df.drop(columns=["iso2"])
+    df = df.set_index("iso3")
+    
+    print(f"  Loaded {len(df)} countries from Equality Index")
+    return df
+
 
 # ======================================================================
 # Main: create unified SQLite database
@@ -761,6 +800,9 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
     print("  - Flight network data")
     flight_costs_df = load_flight_network_data(airports_df)
 
+    print("  - Equality Index data")
+    equality_index_df = load_equality_index_data()
+
     # ------------------------------------------------------------------
     # Merge everything on iso3 for main "countries" table
     # ------------------------------------------------------------------
@@ -784,6 +826,9 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
 
     if not numbeo_indices_df.empty:
         unified_df = unified_df.join(numbeo_indices_df, how="left")
+
+    if not equality_index_df.empty:
+     unified_df = unified_df.join(equality_index_df, how="left")
 
     unified_df = unified_df.reset_index()
 
@@ -887,6 +932,15 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
             if not df.empty:
                 df.to_sql(table_name, conn, if_exists="replace", index=False)
                 print(f"  [OK] '{table_name}' table: {len(df)} rows")
+
+    # Equality Index table
+    if not equality_index_df.empty:
+        equality_index_df.reset_index().to_sql("equality_index", conn, if_exists="replace", index=False)
+        print(f"  [OK] 'equality_index' table: {len(equality_index_df)} rows")
+    else:  
+        print("  [INFO] 'equality_index' table skipped (no data).")
+
+
 
     # ------------------------------------------------------------------
     # Create indexes (only if table exists)
@@ -1005,6 +1059,11 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
         "tarot_countries",
     )
 
+    #Equality Index
+    create_index_if_table_exists( 
+        "CREATE INDEX IF NOT EXISTS idx_equality_index_iso3 ON equality_index(iso3)", 
+        "equality_index", 
+    )
 
     conn.commit()
     print("  [OK] Indexes created")
@@ -1039,6 +1098,8 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
         print(f"  - numbeo_indices ({len(numbeo_indices_df)} rows)")
     if not tarot_df.empty:
         print(f"  - tarot_countries ({len(tarot_df)} rows)")
+    if not equality_index_df.empty:
+        print(f"  - equality_index ({len(equality_index_df)} rows)")
 
 
     print("\nExample queries:")
