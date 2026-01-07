@@ -1,6 +1,4 @@
 import streamlit as st
-import sqlite3
-import pandas as pd
 from pathlib import Path
 import random
 import datetime
@@ -9,12 +7,9 @@ import os
 import json
 import re
 import base64
+import sys
+import importlib
 from dotenv import load_dotenv
-from openai import OpenAI
-import amadeus_api_client as amadeus
-import google_calendar_client as calendar_client
-import requests
-import concurrent.futures
 
 # =============================
 # CONFIG
@@ -33,9 +28,6 @@ REDIRECT_URI = "http://localhost:8501"
 @st.cache_resource
 def get_openai_client():
     return OpenAI(api_key=OPENAI_API_KEY)
-
-
-client = get_openai_client()
 
 # =============================
 # STYLES
@@ -152,6 +144,59 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# =============================
+# DYNAMIC BACKGROUND LOADING
+# =============================
+# We use importlib to load heavy packages into the global namespace
+# AFTER the Styles and Title have been sent to the browser.
+# This gives the "Instant Load" feel while imports finish.
+
+def load_heavy_libs_dynamically():
+    global pd, sqlite3, amadeus, calendar_client, requests, concurrent, OpenAI
+    
+    # 1. Pandas
+    if "pandas" not in sys.modules:
+        pd = importlib.import_module("pandas")
+    else:
+        pd = sys.modules["pandas"]
+        
+    # 2. SQLite
+    if "sqlite3" not in sys.modules:
+        sqlite3 = importlib.import_module("sqlite3")
+    else:
+        sqlite3 = sys.modules["sqlite3"]
+        
+    # 3. OpenAI (Class extraction)
+    if "openai" not in sys.modules:
+        openai_mod = importlib.import_module("openai")
+        OpenAI = getattr(openai_mod, "OpenAI")
+    else:
+        OpenAI = getattr(sys.modules["openai"], "OpenAI")
+
+    # 4. Amadeus
+    if "amadeus_api_client" not in sys.modules:
+        amadeus = importlib.import_module("amadeus_api_client")
+    else:
+        amadeus = sys.modules["amadeus_api_client"]
+
+    # 5. Calendar
+    if "google_calendar_client" not in sys.modules:
+        calendar_client = importlib.import_module("google_calendar_client")
+    else:
+        calendar_client = sys.modules["google_calendar_client"]
+
+    # 6. Requests
+    if "requests" not in sys.modules:
+        requests = importlib.import_module("requests")
+    else:
+        requests = sys.modules["requests"]
+
+    # 7. Concurrent
+    if "concurrent.futures" not in sys.modules:
+        importlib.import_module("concurrent.futures")
+    
+    # We need the parent package 'concurrent' so that 'concurrent.futures' syntax works
+    concurrent = sys.modules["concurrent"]
 
 # =============================
 # WEIGHTS / HELP TEXTS
@@ -190,7 +235,7 @@ SLIDER_HELP = {
 # SMALL HELPERS
 # =============================
 
-def safe_median(s: pd.Series, default: float) -> float:
+def safe_median(s, default: float) -> float:
     s = pd.to_numeric(s, errors="coerce")
     if s.notna().any():
         return float(s.median())
@@ -534,7 +579,7 @@ class DataManager:
             SELECT iso2, iata_code
             FROM (
                 SELECT iso2, iata_code,
-                       ROW_NUMBER() OVER (PARTITION BY iso2 ORDER BY passenger_volume DESC) as rank
+                    ROW_NUMBER() OVER (PARTITION BY iso2 ORDER BY passenger_volume DESC) as rank
                 FROM airports
             ) WHERE rank = 1
         )
@@ -639,17 +684,14 @@ class DataManager:
             conn.close()
         return float(res.iloc[0]["one_eur_to_currency"]) if not res.empty else 1.0
 
-
-data_manager = DataManager()
-
 # =============================
 # MATCHER
 # =============================
 class TravelMatcher:
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df):
         self.df = df.copy()
 
-    def normalize(self, series: pd.Series) -> pd.Series:
+    def normalize(self, series):
         s = pd.to_numeric(series, errors="coerce")
         if s.notna().sum() == 0:
             return pd.Series([0.5] * len(s), index=s.index)
@@ -661,7 +703,7 @@ class TravelMatcher:
         rnd = random.Random(f"{seed}::{key}")
         return rnd.random()
 
-    def calculate_match(self, weights_100: dict, prefs: dict) -> pd.DataFrame:
+    def calculate_match(self, weights_100: dict, prefs: dict):
         df = self.df.copy()
 
         weights_100 = normalize_weights_100(weights_100)
@@ -804,6 +846,13 @@ SWIPE_CARDS = [
 # UI STEPS
 # =============================
 def show_profile_step():
+    # We need to access data_manager inside the function now, 
+    # but it might not be initialized if we are optimizing for speed.
+    # However, Step 1 UI ONLY needs data_manager inside the "Next" button logic.
+    pass 
+
+def render_profile_ui():
+    global data_manager
     st.markdown("### Step 1: 📍 Where are you starting from?")
     origin_options = {"Germany": "FRA", "United States": "ATL"}
     selected_origin = st.radio("Select origin:", list(origin_options.keys()), horizontal=True, label_visibility="collapsed")
@@ -912,6 +961,16 @@ def show_profile_step():
         slider_row("Hidden Gem Spice", "hidden_gem")
         slider_row("Astro Spice", "astro")
         slider_row("Chaos Jitter", "jitter")
+
+    # =========================================================
+    # 🚀 BACKGROUND LOADING TRIGGER
+    # =========================================================
+    # The UI above (Radio, Date Input, etc.) has already been sent to the browser.
+    # Now, while the user is reading/clicking, we load the heavy stuff.
+    if "libs_loaded" not in st.session_state:
+        load_heavy_libs_dynamically()
+        data_manager = DataManager()
+        st.session_state.libs_loaded = True
 
     if st.button("Next: Personalize Your Trip →"):
         if not (isinstance(vacation_dates, (list, tuple)) and len(vacation_dates) == 2):
@@ -1610,9 +1669,15 @@ def show_confirmation_step():
 # APP ROUTER
 # =============================
 def run_app():
+    global data_manager
     # Handle Google OAuth Redirect
     q = st.query_params
     if "code" in q and 'google_creds' not in st.session_state:
+        # Ensure libs are loaded before processing OAuth callback (which uses data_manager)
+        if "data_manager" not in globals():
+            load_heavy_libs_dynamically()
+            data_manager = DataManager()
+            st.session_state.libs_loaded = True
         flow = calendar_client.get_google_flow(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI)
         st.session_state.google_creds = calendar_client.get_credentials_from_code(flow, q.get("state"), q.get("code"))
         
@@ -1652,6 +1717,17 @@ def run_app():
     # session init
     if "step" not in st.session_state:
         st.session_state.step = 1
+
+    # ==========================================
+    # 🚦 ROUTING LOGIC (The Performance Fix)
+    # ==========================================
+    
+    # If we are deeper in the app (Step > 1), we MUST load everything.
+    if st.session_state.step > 1 or "libs_loaded" in st.session_state:
+        load_heavy_libs_dynamically()
+        data_manager = DataManager()
+        st.session_state.libs_loaded = True
+
     if "weights" not in st.session_state:
         st.session_state.weights = normalize_weights_100({
             "safety_tugo": 18,
@@ -1677,7 +1753,7 @@ def run_app():
 
     # routing
     if st.session_state.step == 1:
-        show_profile_step()
+        render_profile_ui()
     elif st.session_state.step == 2:
         show_swiping_step()
     elif st.session_state.step == 3:

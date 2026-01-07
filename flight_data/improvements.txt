@@ -1,7 +1,49 @@
+# Use dynamic loading (importlib)
+- Without dynamic loading (cold start): Multiple seconds until the first streamlit page appeared 
+- With dynamic loading (cold start): First streamlit page appeares instantaneously
+
+Modules are loaded programmatically at runtime. We achieved an instantaneous cold start by removing heavy dependencies like Pandas and OpenAI from the top-level imports, allowing the script to execute the initial UI rendering commands immediately.
+While the user views the "Step 1" interface, we utilize importlib to programmatically inject these libraries into the global namespace in the background without blocking the visual output.
+This strategy decouples the expensive loading process from the initial render, ensuring the user perceives zero wait time while the application silently prepares the heavy logic.
+
+
+# Use @st.cache_data and @st.cache_resource
+These decorators prevent Streamlit from re-running expensive operations, such as querying the SQLite database for thousands of airports or initializing the OpenAI client, every time you click a button, storing the results in memory instead. By skipping these redundant data fetches, they reduced the reload time of each interaction from a sluggish ~5 seconds down to milliseconds. This ensures the interface feels snappy and responsive rather than lagging on every user input.
+
 # Added batching to add flights faster to google calendar
 - without batching: avg 1.76sec
 - with batching: avg 1.29sec
 The old version functioned by sending a separate HTTP request to Google for every single flight segment, forcing the application to wait for a server response before sending the next one. The new version instead prepares all event data locally and packages them into a single "batch" request that is sent to Google at once. 
 
-# Use @st.cache_data and @st.cache_resource
-These decorators prevent Streamlit from re-running expensive operations, such as querying the SQLite database for thousands of airports or initializing the OpenAI client, every time you click a button, storing the results in memory instead. By skipping these redundant data fetches, they reduced the reload time of each interaction from a sluggish ~5 seconds down to milliseconds. This ensures the interface feels snappy and responsive rather than lagging on every user input.
+
+### cProfile code 
+- At the very top
+    import cProfile
+    import pstats
+    import io
+
+    # ==========================================
+    # 1. START PROFILING IMMEDIATELY
+    # ==========================================
+    # This must be the very first thing that happens
+    profiler = cProfile.Profile()
+    profiler.enable()
+- At the very bottom 
+    if __name__ == "__main__":
+        try:
+            run_app()
+        finally:
+            # This block runs immediately after the page finishes loading
+            profiler.disable()
+            
+            s = io.StringIO()
+            # Sort by 'cumulative' time to see the heavy hitters
+            ps = pstats.Stats(profiler, stream=s).sort_stats('cumtime')
+            
+            # Print top 30 slowest items
+            ps.print_stats(30)
+            
+            print("\n" + "="*50)
+            print("⏱️  PERFORMANCE REPORT")
+            print("="*50)
+            print(s.getvalue())

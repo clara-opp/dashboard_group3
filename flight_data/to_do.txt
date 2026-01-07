@@ -1,3 +1,7 @@
+1. Make the round-trip selection in flight search configuration smaller
+
+1.1 Change origin airports selection so that it shows all airports not only the most important one for each country. Note that the default selected airport should still be the most important airport of the country the user is located in.
+
 2. Connect chatbot to google maps to plan day trips with a fixed budget
 - Google Places API: Filter places by price level
     The Feature: Price Level (Ranges from 0 to 4).
