@@ -31,6 +31,7 @@ REDIRECT_URI = "http://localhost:8501"
 def get_openai_client():
     return OpenAI(api_key=OPENAI_API_KEY)
 
+
 # =============================
 # STYLES
 # =============================
@@ -72,12 +73,6 @@ st.markdown(
         .carrier-text { font-size: 1.1rem; font-weight: 600; color: var(--text-color); }
         .route-text { color: var(--text-color); opacity: 0.7; font-size: 0.9rem; }
         
-        /* Flight Result Styling */
-        .price-text { color: var(--primary-color); font-size: 1.4rem; font-weight: 700; }
-        .carrier-text { font-size: 1.1rem; font-weight: 600; color: var(--text-color); }
-        .route-text { color: var(--text-color); opacity: 0.7; font-size: 0.9rem; }
-        
-        /* Timeline Styling */
         .time-badge { background-color: #1e1e1e; color: #4caf50; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-weight: 700; margin-right: 10px; border: 1px solid #4caf50; }
         .timeline-row { margin: 2px 0; display: flex; align-items: center; font-size: 0.9rem; }
         .duration-info { margin-left: 35px; color: var(--text-color); opacity: 0.6; font-style: italic; font-size: 0.8rem; }
@@ -85,7 +80,6 @@ st.markdown(
         .city-name { font-weight: 700; color: var(--text-color); }
         .iata-code { color: var(--text-color); opacity: 0.6; }
         
-        /* Swipe question - plain text, no box */
         .swipe-question {
             text-align: center;
             font-size: 1.2rem;
@@ -97,7 +91,6 @@ st.markdown(
             border: none !important;
         }
 
-        /* Large clickable button cards */
         .stButton > button {
             width: 100%;
             border-radius: 14px;
@@ -130,7 +123,6 @@ st.markdown(
             transform: translateY(-4px) !important;
         }
 
-        /* Mobile responsive */
         @media (max-width: 768px) {
             .stButton > button {
                 height: 180px !important;
@@ -140,8 +132,6 @@ st.markdown(
                 font-size: 1rem;
             }
         }
-
-        # CSS - IN DEN BESTEHENDEN STYLE BLOCK hinzufügen
 
         .pride-badge-top-left {
             display: flex;
@@ -177,72 +167,57 @@ st.markdown(
             height: auto;
             min-height: auto;
         }
-
-
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+
 # =============================
 # DYNAMIC BACKGROUND LOADING
 # =============================
-# We use importlib to load heavy packages into the global namespace
-# AFTER the Styles and Title have been sent to the browser.
-# This gives the "Instant Load" feel while imports finish.
-
 def load_heavy_libs_dynamically():
     global pd, sqlite3, amadeus, calendar_client, requests, concurrent, OpenAI
-    
-    # 1. Pandas
+
     if "pandas" not in sys.modules:
         pd = importlib.import_module("pandas")
     else:
         pd = sys.modules["pandas"]
-        
-    # 2. SQLite
+
     if "sqlite3" not in sys.modules:
         sqlite3 = importlib.import_module("sqlite3")
     else:
         sqlite3 = sys.modules["sqlite3"]
-        
-    # 3. OpenAI (Class extraction)
+
     if "openai" not in sys.modules:
         openai_mod = importlib.import_module("openai")
         OpenAI = getattr(openai_mod, "OpenAI")
     else:
         OpenAI = getattr(sys.modules["openai"], "OpenAI")
 
-    # 4. Amadeus
     if "amadeus_api_client" not in sys.modules:
         amadeus = importlib.import_module("amadeus_api_client")
     else:
         amadeus = sys.modules["amadeus_api_client"]
 
-    # 5. Calendar
     if "google_calendar_client" not in sys.modules:
         calendar_client = importlib.import_module("google_calendar_client")
     else:
         calendar_client = sys.modules["google_calendar_client"]
 
-    # 6. Requests
     if "requests" not in sys.modules:
         requests = importlib.import_module("requests")
     else:
         requests = sys.modules["requests"]
 
-    # 7. Concurrent
     if "concurrent.futures" not in sys.modules:
         importlib.import_module("concurrent.futures")
-    
-    # We need the parent package 'concurrent' so that 'concurrent.futures' syntax works
     concurrent = sys.modules["concurrent"]
+
 
 # =============================
 # WEIGHTS / HELP TEXTS
 # =============================
-
-# Numbeo safety removed: safety uses TuGo only
 WEIGHT_KEYS = [
     "safety_tugo",
     "cost", "restaurant", "groceries", "rent",
@@ -266,15 +241,15 @@ SLIDER_HELP = {
     "culture": "Prefers countries rich in cultural heritage and historical sites.",
     "weather": "Prioritizes destinations whose average climate matches your preferred temperature.",
     "luxury_price": "Allows more expensive destinations to rank higher if they offer a premium or luxury experience.",
-    "hidden_gem": "Adds a preference for less obvious, off-the-radar destinations.",
+    "hidden_gem": "Prefers less obvious destinations (few UNESCO + some controlled randomness).",
     "astro": "Adds a playful, astrology-based influence to the ranking.",
     "jitter": "Introduces controlled randomness to diversify otherwise similar results.",
 }
 
+
 # =============================
 # SMALL HELPERS
 # =============================
-
 def safe_median(s, default: float) -> float:
     s = pd.to_numeric(s, errors="coerce")
     if s.notna().any():
@@ -291,10 +266,6 @@ def clamp_int(v, lo=0, hi=100) -> int:
 
 
 def normalize_weights_100(weights: dict) -> dict:
-    """
-    Ensure full WEIGHT_KEYS dict of ints that sums to exactly 100.
-    If all are 0 -> defaults to cost=100 (safe fallback).
-    """
     w = {k: clamp_int(weights.get(k, 0)) for k in WEIGHT_KEYS}
     total = sum(w.values())
     if total <= 0:
@@ -310,7 +281,6 @@ def normalize_weights_100(weights: dict) -> dict:
         k_star = max(w_int, key=lambda kk: w_int[kk])
         w_int[k_star] = clamp_int(w_int[k_star] + drift)
 
-    # final guard
     total2 = sum(w_int.values())
     if total2 != 100:
         k_star = max(w_int, key=lambda kk: w_int[kk])
@@ -320,20 +290,12 @@ def normalize_weights_100(weights: dict) -> dict:
 
 
 def set_adv_from_weights(weights_100: dict):
-    """
-    Writes persona weights into adv_* session keys.
-    IMPORTANT: call this only BEFORE slider widgets are created in the current run.
-    """
     w = normalize_weights_100(weights_100)
     for k in WEIGHT_KEYS:
         st.session_state[f"adv_{k}"] = int(w.get(k, 0))
 
 
 def _largest_remainder_allocation(shares_float: dict, total_points: int, caps: dict | None = None) -> dict:
-    """
-    Allocate integer points summing to total_points based on float shares (largest remainder).
-    caps (optional): per-key max allocation.
-    """
     if total_points <= 0:
         return {k: 0 for k in shares_float.keys()}
 
@@ -366,7 +328,6 @@ def _largest_remainder_allocation(shares_float: dict, total_points: int, caps: d
     if caps:
         out = _apply_caps_and_redistribute(out, caps, total_points)
 
-    # drift guard
     drift = total_points - sum(out.values())
     if drift != 0:
         if drift > 0:
@@ -391,9 +352,6 @@ def _largest_remainder_allocation(shares_float: dict, total_points: int, caps: d
 
 
 def _apply_caps_and_redistribute(out: dict, caps: dict, total_points: int) -> dict:
-    """
-    Clamp to caps and redistribute overflow into keys with headroom.
-    """
     out = out.copy()
     while True:
         overflow = 0
@@ -442,14 +400,6 @@ def _apply_caps_and_redistribute(out: dict, caps: dict, total_points: int) -> di
 
 
 def enforce_sum_100_proportional(changed_key: str):
-    """
-    Keeps sum exactly 100:
-    - changed_key stays fixed
-    - only delta is redistributed across other ACTIVE (>0) sliders
-    - redistribution is proportional to current values (keeps the existing balance)
-    - 0 stays 0 (not automatically activated)
-    - if user kills the last active slider -> changed_key becomes 100
-    """
     keys = WEIGHT_KEYS
     if changed_key not in keys:
         return
@@ -457,7 +407,6 @@ def enforce_sum_100_proportional(changed_key: str):
     cur = {k: clamp_int(st.session_state.get(f"adv_{k}", 0)) for k in keys}
     total = sum(cur.values())
 
-    # avoid all-zero state
     if total <= 0:
         for k in keys:
             st.session_state[f"adv_{k}"] = 0
@@ -469,7 +418,7 @@ def enforce_sum_100_proportional(changed_key: str):
 
     fixed = cur[changed_key]
     others = [k for k in keys if k != changed_key]
-    candidates = [k for k in others if cur[k] > 0]  # only active sliders
+    candidates = [k for k in others if cur[k] > 0]
 
     if not candidates:
         for k in others:
@@ -480,7 +429,6 @@ def enforce_sum_100_proportional(changed_key: str):
     delta = 100 - total
 
     if delta > 0:
-        # distribute missing points proportionally to current candidate values
         add = _largest_remainder_allocation(
             {k: float(cur[k]) for k in candidates},
             delta,
@@ -490,7 +438,6 @@ def enforce_sum_100_proportional(changed_key: str):
             cur[k] = clamp_int(cur[k] + int(add.get(k, 0)))
 
     else:
-        # remove points proportionally without driving any candidate below 0
         remaining = -delta
         pool = candidates[:]
 
@@ -521,7 +468,6 @@ def enforce_sum_100_proportional(changed_key: str):
                 remaining -= 1
                 pool = [k for k in pool if cur[k] > 0]
 
-    # enforce fixed exactly + drift correction (not touching changed_key)
     cur[changed_key] = fixed
     drift = 100 - sum(cur.values())
     if drift != 0:
@@ -550,10 +496,6 @@ def enforce_sum_100_proportional(changed_key: str):
 
 
 def slider_row(label: str, key: str):
-    """
-    One slider row with a small popover help.
-    IMPORTANT: no 'value=' for sliders with key= (avoids Streamlit warning).
-    """
     left, right = st.columns([0.88, 0.12], vertical_alignment="center")
     with left:
         st.markdown(f"**{label}**")
@@ -564,7 +506,6 @@ def slider_row(label: str, key: str):
                 unsafe_allow_html=True,
             )
 
-    # Ensure state exists BEFORE widget creation (prevents default+state conflict)
     st.session_state.setdefault(f"adv_{key}", 0)
 
     st.slider(
@@ -584,14 +525,12 @@ def weights_to_unit(weights_100: dict) -> dict:
 
 
 def adjust_weights_points(weights_100: dict, deltas: dict) -> dict:
-    """
-    Apply integer point deltas (swipes), clamp and renormalize to sum=100.
-    """
     w = {k: clamp_int(weights_100.get(k, 0)) for k in WEIGHT_KEYS}
     for k, d in deltas.items():
         if k in w:
             w[k] = clamp_int(w[k] + int(d))
     return normalize_weights_100(w)
+
 
 # =============================
 # DATA MANAGER
@@ -729,6 +668,7 @@ class DataManager:
             conn.close()
         return float(res.iloc[0]["one_eur_to_currency"]) if not res.empty else 1.0
 
+
 # =============================
 # MATCHER
 # =============================
@@ -754,7 +694,6 @@ class TravelMatcher:
         weights_100 = normalize_weights_100(weights_100)
         weights = weights_to_unit(weights_100)
 
-        # Safety (TuGo)
         def tugo_to_score(x):
             s = str(x)
             if "Do not travel" in s:
@@ -765,16 +704,13 @@ class TravelMatcher:
 
         df["safety_tugo_score"] = df["tugo_advisory_state"].apply(tugo_to_score)
 
-        # Culture (UNESCO)
         unesco = pd.to_numeric(df.get("unesco_count"), errors="coerce").fillna(0)
         df["culture_score"] = self.normalize(unesco)
 
-        # Weather fit
         target_temp = float(prefs.get("target_temp", 25))
         temp = pd.to_numeric(df.get("climate_avg_temp_c"), errors="coerce").fillna(target_temp)
         df["weather_score"] = 1 - self.normalize((temp - target_temp).abs())
 
-        # Cost/value (lower is better)
         col = pd.to_numeric(df.get("numbeo_cost_of_living_index"), errors="coerce")
         rest = pd.to_numeric(df.get("numbeo_restaurant_price_index"), errors="coerce")
         groc = pd.to_numeric(df.get("numbeo_groceries_index"), errors="coerce")
@@ -790,34 +726,33 @@ class TravelMatcher:
         df["groceries_value_score"] = 1 - self.normalize(groc.fillna(groc_fb))
         df["rent_score"] = 1 - self.normalize(rent.fillna(rent_fb))
 
-        # Luxury (high cost can be good)
         df["luxury_price_score"] = self.normalize(col.fillna(col_fb))
 
-        # Purchasing power (higher is better)
         pp = pd.to_numeric(df.get("numbeo_purchasing_power_incl_rent_index"), errors="coerce")
         pp_fb = safe_median(pp, default=50.0)
         df["purchasing_power_score"] = self.normalize(pp.fillna(pp_fb))
 
-        # Quality of life (higher is better)
         qol = pd.to_numeric(df.get("numbeo_quality_of_life_index"), errors="coerce")
         qol_fb = safe_median(qol, default=100.0)
         df["qol_score"] = self.normalize(qol.fillna(qol_fb))
 
-        # Health care (higher is better)
         hc = pd.to_numeric(df.get("numbeo_health_care_index"), errors="coerce")
         hc_fb = safe_median(hc, default=50.0)
         df["health_care_score"] = self.normalize(hc.fillna(hc_fb))
 
-        # Clean air (lower pollution is better)
         pol = pd.to_numeric(df.get("numbeo_pollution_index"), errors="coerce")
         pol_fb = safe_median(pol, default=50.0)
         df["clean_air_score"] = 1 - self.normalize(pol.fillna(pol_fb))
 
-        # New astro-score:
+        # ✅ Hidden gem: ALWAYS computed (few UNESCO + controlled stable randomness)
+        gem_seed = int(prefs.get("gem_seed", 1337))
+        low_unesco_score = 1 - self.normalize(unesco)
+        noise_score = df["country_name"].apply(lambda c: self._stable_noise(str(c), gem_seed))
+        df["hidden_gem_score"] = 0.70 * low_unesco_score + 0.30 * noise_score
+
         if float(weights.get("astro", 0.0)) > 0:
             boosted_countries = st.session_state.get("tarot_boosted_countries", [])
             if boosted_countries:
-                # 20% boost for matching countries (applied to their base score)
                 df["astro_boost"] = df["iso3"].isin(boosted_countries).astype(float) * 0.20
                 df["astro_score"] = df["astro_boost"]
             else:
@@ -825,19 +760,12 @@ class TravelMatcher:
         else:
             df["astro_score"] = 0.0
 
-        if prefs.get("hidden_gem_mode", False):
-            seed = int(prefs.get("gem_seed", 1337))
-            df["hidden_gem_score"] = df["country_name"].apply(lambda c: self._stable_noise(str(c), seed))
-        else:
-            df["hidden_gem_score"] = 0.0
-
         if float(weights.get("jitter", 0.0)) > 0:
             seed = int(prefs.get("jitter_seed", 9001))
             df["jitter_score"] = df["country_name"].apply(lambda c: self._stable_noise(str(c), seed))
         else:
             df["jitter_score"] = 0.0
 
-        # Final score in [0,1] (weights sum to 1 after conversion)
         df["final_score"] = (
             df["safety_tugo_score"] * weights.get("safety_tugo", 0.0) +
             df["cost_score"] * weights.get("cost", 0.0) +
@@ -857,7 +785,8 @@ class TravelMatcher:
         )
 
         return df.sort_values("final_score", ascending=False).reset_index(drop=True)
-    
+
+
 def format_duration(duration_str):
     if isinstance(duration_str, datetime.timedelta):
         total_seconds = int(duration_str.total_seconds())
@@ -878,10 +807,11 @@ def parse_duration_to_td(duration_raw):
             m = int(match.group(2)[:-1])
     return datetime.timedelta(hours=h, minutes=m)
 
+
 # =============================
 # SWIPE CARDS
 # =============================
-SWIPE_CARDS = [
+SWIPE_CARDS_ALL = [
     {"id": "weather", "title": "What's the vibe?", "left": {"label": "Beach & Sun", "icon": "☀️"}, "right": {"label": "Cozy & Cool", "icon": "🧥"}},
     {"id": "budget", "title": "How are we spending?", "left": {"label": "Luxury Escape", "icon": "💎"}, "right": {"label": "Budget Adventure", "icon": "💰"}},
     {"id": "culture", "title": "What will we explore?", "left": {"label": "History & Museums", "icon": "🏛️"}, "right": {"label": "Nature & Parks", "icon": "🌳"}},
@@ -890,27 +820,30 @@ SWIPE_CARDS = [
     {"id": "nightlife", "title": "Night plan?", "left": {"label": "Party Mode", "icon": "🕺"}, "right": {"label": "Chill Mode", "icon": "🫖"}},
     {"id": "mobility", "title": "Move how?", "left": {"label": "Walk & Wander", "icon": "🚶"}, "right": {"label": "Hop & Go", "icon": "🚕"}},
     {"id": "hidden_gems", "title": "Mainstream or hidden gems?", "left": {"label": "Hidden Gems", "icon": "🗝️"}, "right": {"label": "Main Hits", "icon": "🎯"}},
+
+    {"id": "air", "title": "Breathe mode or city chaos?", "left": {"label": "Air Lungs", "icon": "🌲"}, "right": {"label": "I can handle smog", "icon": "🏙️"}},
+    {"id": "hospital", "title": "Health insurance arc unlocked?", "left": {"label": "I’m a fragile legend", "icon": "🏥"}, "right": {"label": "I respawn at 100%", "icon": "😤"}},
+    {"id": "long_stay", "title": "Suitcase home base or hop-scotch?", "left": {"label": "Settle in", "icon": "🧳"}, "right": {"label": "Hop around", "icon": "✈️"}},
 ]
+
 
 # =============================
 # UI STEPS
 # =============================
 def show_profile_step():
-    # We need to access data_manager inside the function now, 
-    # but it might not be initialized if we are optimizing for speed.
-    # However, Step 1 UI ONLY needs data_manager inside the "Next" button logic.
-    pass 
+    pass
+
 
 def render_profile_ui():
     global data_manager
     col_content, col_flag_empty = st.columns([0.88, 0.12], vertical_alignment="top")
-    
+
     with col_content:
         st.markdown("**Step 1: Where are you starting from?**")
         origin_options = {"Germany": "FRA", "United States": "ATL"}
         selected_origin = st.radio("Select origin", list(origin_options.keys()), horizontal=True, label_visibility="collapsed")
         st.session_state.origin_iata = origin_options[selected_origin]
-    
+
     with col_flag_empty:
         c1, c2 = st.columns([0.5, 0.5])
         with c1:
@@ -918,11 +851,11 @@ def render_profile_ui():
             if st.button("🏳️‍🌈", key="pride_toggle", help="LGBTQ+ safe filter", type="primary" if is_active else "secondary"):
                 st.session_state.lgbtq_filter_active = not st.session_state.lgbtq_filter_active
                 st.rerun()
-        
+
         with c2:
             with st.popover("ℹ️"):
                 st.markdown("Legal rights + Societal acceptance. Index ≥ 60")
-    
+
     st.markdown("### Step 2: 🧭 Choose Your Traveller Profile")
     st.write("Pick a profile. Advanced Customization shows weights (0–100 points) that always sum to 100.")
 
@@ -985,22 +918,13 @@ def render_profile_ui():
     persona = st.selectbox("Select a persona:", list(personas.keys()), key="persona_select", label_visibility="collapsed")
     st.session_state.persona_defaults = personas[persona].copy()
 
-    # Persona switch: wipe slider keys BEFORE widgets are built, then write new values
     if st.session_state.get("persona_active") != persona:
         st.session_state.persona_active = persona
         for wk in WEIGHT_KEYS:
             st.session_state.pop(f"adv_{wk}", None)
         set_adv_from_weights(personas[persona])
 
-    st.markdown("### Step 3: 📅 When is your vacation?")
-    today = datetime.date.today()
-    vacation_dates = st.date_input(
-        "Select your travel window:",
-        value=[today + datetime.timedelta(days=30), today + datetime.timedelta(days=40)],
-        min_value=today,
-        help="This helps us find the best flights and weather for your trip."
-    )
-
+    # Advanced Customization directly under profile
     with st.expander("Advanced Customization (Optional)"):
         if st.button("↩ Reset to Persona Defaults", use_container_width=True):
             for wk in WEIGHT_KEYS:
@@ -1027,11 +951,15 @@ def render_profile_ui():
         slider_row("Astro Spice", "astro")
         slider_row("Chaos Jitter", "jitter")
 
-    # =========================================================
-    # 🚀 BACKGROUND LOADING TRIGGER
-    # =========================================================
-    # The UI above (Radio, Date Input, etc.) has already been sent to the browser.
-    # Now, while the user is reading/clicking, we load the heavy stuff.
+    st.markdown("### Step 3: 📅 When is your vacation?")
+    today = datetime.date.today()
+    vacation_dates = st.date_input(
+        "Select your travel window:",
+        value=[today + datetime.timedelta(days=30), today + datetime.timedelta(days=40)],
+        min_value=today,
+        help="This helps us find the best flights and weather for your trip."
+    )
+
     if "libs_loaded" not in st.session_state:
         load_heavy_libs_dynamically()
         data_manager = DataManager()
@@ -1053,11 +981,15 @@ def render_profile_ui():
             "food_style": None,
             "night_style": None,
             "move_style": None,
-            "hidden_gem_mode": False,
             "gem_seed": st.session_state.get("gem_seed", random.randint(1, 10_000_000)),
             "astro_seed": st.session_state.get("astro_seed", random.randint(1, 10_000_000)),
             "jitter_seed": st.session_state.get("jitter_seed", random.randint(1, 10_000_000)),
         }
+
+        # reset swipe-mode choice each run
+        st.session_state.swipe_mode_chosen = False
+        st.session_state.active_swipe_cards = []
+        st.session_state.card_index = 0
 
         if st.session_state.origin_iata == "ATL":
             st.session_state.currency_symbol = "$"
@@ -1066,40 +998,71 @@ def render_profile_ui():
             st.session_state.currency_symbol = "€"
             st.session_state.currency_rate = 1.0
 
-        st.session_state.card_index = 0
         st.session_state.step = 2
         st.rerun()
 
 
+def _choose_swipe_cards(mode: str):
+    all_cards = list(SWIPE_CARDS_ALL)
+    if mode == "all":
+        return all_cards
+    seed = int(st.session_state.prefs.get("jitter_seed", random.randint(1, 10_000_000)))
+    rnd = random.Random(seed)
+    k = min(5, len(all_cards))
+    return rnd.sample(all_cards, k=k)
+
+
 def show_swiping_step():
-    if st.session_state.card_index >= len(SWIPE_CARDS):
+    # First screen in Step 2: choose swipe mode (only once per run)
+    if not st.session_state.get("swipe_mode_chosen", False):
+        st.markdown("### Step 4: 🃏 Choose your swipe experience")
+        st.caption("Do you want the full questionnaire, or a randomized 5-card mini-run?")
+
+        c1, c2 = st.columns(2, gap="large")
+        with c1:
+            if st.button("🎲 Random 5 (Surprise me)", use_container_width=True, key="mode_random5"):
+                st.session_state.swipe_mode = "random5"
+                st.session_state.active_swipe_cards = _choose_swipe_cards("random5")
+                st.session_state.card_index = 0
+                st.session_state.swipe_mode_chosen = True
+                st.rerun()
+        with c2:
+            if st.button("🧠 Full experience (All swipes)", use_container_width=True, key="mode_all"):
+                st.session_state.swipe_mode = "all"
+                st.session_state.active_swipe_cards = _choose_swipe_cards("all")
+                st.session_state.card_index = 0
+                st.session_state.swipe_mode_chosen = True
+                st.rerun()
+        return
+
+    cards = st.session_state.get("active_swipe_cards") or list(SWIPE_CARDS_ALL)
+
+    if st.session_state.card_index >= len(cards):
         st.session_state.step = 3
         st.rerun()
         return
 
     card_index = st.session_state.card_index
-    progress_val = min((card_index + 1) / len(SWIPE_CARDS), 1.0)
+    progress_val = min((card_index + 1) / len(cards), 1.0)
 
-    st.markdown(f"### Step 4: Swipe to Refine Your Choices ({card_index + 1}/{len(SWIPE_CARDS)})")
+    st.markdown(f"### Step 5: Swipe to Refine Your Choices ({card_index + 1}/{len(cards)})")
     st.progress(progress_val)
 
-    card = SWIPE_CARDS[card_index]
+    card = cards[card_index]
 
     def post_update():
         st.session_state.weights = normalize_weights_100(st.session_state.weights)
         st.session_state.card_index += 1
         st.rerun()
 
-    # Display question as plain text without box
     st.markdown(f"<div class='swipe-question'>{card['title']}</div>", unsafe_allow_html=True)
     st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2, gap="medium")
 
     with c1:
-        # Button with emoji + label combined
         if st.button(
-            f"{card['left']['icon']}\n{card['left']['label']}", 
+            f"{card['left']['icon']}\n{card['left']['label']}",
             key=f"left_{card_index}",
             use_container_width=True
         ):
@@ -1132,17 +1095,24 @@ def show_swiping_step():
                 st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +2})
 
             if card["id"] == "hidden_gems":
-                st.session_state.prefs["hidden_gem_mode"] = True
                 w = st.session_state.weights.copy()
                 w["hidden_gem"] = max(int(w.get("hidden_gem", 0)), 18)
                 st.session_state.weights = normalize_weights_100(w)
 
+            if card["id"] == "air":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"clean_air": +6, "qol": +2})
+
+            if card["id"] == "hospital":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"health_care": +8, "safety_tugo": +3})
+
+            if card["id"] == "long_stay":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"rent": +8, "groceries": +3})
+
             post_update()
 
     with c2:
-        # Button with emoji + label combined
         if st.button(
-            f"{card['right']['icon']}\n{card['right']['label']}", 
+            f"{card['right']['icon']}\n{card['right']['label']}",
             key=f"right_{card_index}",
             use_container_width=True
         ):
@@ -1171,13 +1141,20 @@ def show_swiping_step():
                 st.session_state.weights = adjust_weights_points(st.session_state.weights, {"cost": +2})
 
             if card["id"] == "hidden_gems":
-                st.session_state.prefs["hidden_gem_mode"] = False
                 w = st.session_state.weights.copy()
                 w["hidden_gem"] = 0
                 st.session_state.weights = normalize_weights_100(w)
 
+            if card["id"] == "air":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +2, "restaurant": +2})
+
+            if card["id"] == "hospital":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"health_care": -5, "hidden_gem": +3})
+
+            if card["id"] == "long_stay":
+                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +3, "jitter": +2})
+
             post_update()
-    
 
 
 def show_astro_step():
@@ -1251,15 +1228,13 @@ def show_astro_step():
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # State Lock
+
     if "tarot_drawn" not in st.session_state:
         st.session_state.tarot_drawn = False
-    
-    # 🔥 GRÖßERE BUTTONS
+
     if not st.session_state.tarot_drawn:
         col1, col2 = st.columns(2, gap="large")
-        
+
         with col1:
             if st.button("🃏 DRAW CARD", key="draw_tarot", use_container_width=True, help="Pull a card from the cosmic deck"):
                 try:
@@ -1267,13 +1242,12 @@ def show_astro_step():
                     tarot_url = "https://roxyapi.com/api/v1/data/astro/tarot"
                     url = f"{tarot_url}/single-card-draw?token={api_key}&reversed_probability=0.3"
                     response = requests.get(url, timeout=20)
-                    
+
                     if response.status_code == 200:
                         card_data = response.json()
                         card_name = card_data.get("name", "Unknown Card")
                         is_reversed = card_data.get("is_reversed", False)
-                        
-                        # 5 Länder für Boost
+
                         conn = data_manager.get_connection()
                         cursor = conn.cursor()
                         orientation = "reversed" if is_reversed else "upright"
@@ -1283,23 +1257,23 @@ def show_astro_step():
                         )
                         results = cursor.fetchall()
                         conn.close()
-                        
+
                         st.session_state["tarot_boosted_countries"] = [row[0] for row in results]
-                        
+
                         w = st.session_state.weights.copy()
                         w["astro"] = 20
                         st.session_state.weights = normalize_weights_100(w)
-                        
+
                         st.session_state.tarot_drawn = True
                         st.session_state.tarot_card = card_data
                         st.rerun()
-                        
+
                     else:
                         st.error(f"Cosmic connection failed: {response.status_code}")
-                        
+
                 except Exception as e:
                     st.error(f"Stars misaligned: {str(e)}")
-        
+
         with col2:
             if st.button("⏭️ SKIP", key="skip_tarot", use_container_width=True, help="Skip tarot and continue"):
                 w = st.session_state.weights.copy()
@@ -1308,30 +1282,27 @@ def show_astro_step():
                 st.session_state["tarot_boosted_countries"] = []
                 st.session_state.step = 4
                 st.rerun()
-    
-    # 🎴 RESULT - KARTE LINKS, TEXT RECHTS (MIT ECHTEN COLUMNS!)
+
     if st.session_state.tarot_drawn:
         card_data = st.session_state.get("tarot_card", {})
         card_name = card_data.get("name", "Unknown Card")
         is_reversed = card_data.get("is_reversed", False)
         card_image = card_data.get("image", "")
-        
+
         orientation_emoji = "🔄" if is_reversed else "⬆️"
-        
-        # TITLE
+
         st.markdown(f"""
         <div class="astro-container" style="padding: 1.5rem; margin-top: 2rem;">
             <div class="card-title">{orientation_emoji} {card_name}</div>
         </div>
         """, unsafe_allow_html=True)
-        
-        # RESULT mit ECHTEN COLUMNS - KARTE LINKS (1) + TEXT RECHTS (1.5)
+
         col_img, col_text = st.columns([1, 1.5], gap="large")
-        
+
         with col_img:
             if card_image:
                 st.image(card_image, width=280)
-        
+
         with col_text:
             st.markdown(f"""
             <div class="meaning-box">
@@ -1339,7 +1310,7 @@ def show_astro_step():
                 <p>{card_data.get('meaning', 'Cosmic wisdom awaits...')[:300]}</p>
             </div>
             """, unsafe_allow_html=True)
-            
+
             travel_meaning = card_data.get('travel_meaning', card_data.get('meaning', 'Destiny guides your path...'))
             st.markdown(f"""
             <div class="meaning-box">
@@ -1347,10 +1318,9 @@ def show_astro_step():
                 <p>{travel_meaning[:300]}</p>
             </div>
             """, unsafe_allow_html=True)
-        
+
         st.markdown("---")
-        
-        # NEXT BUTTON
+
         if st.button("➡️ Next: Ban List", use_container_width=True, key="next_tarot"):
             st.session_state.step = 4
             st.rerun()
@@ -1434,10 +1404,40 @@ def show_results_step():
             with c2:
                 st.markdown(f"#### {i+1}. {row['country_name']}")
                 score_pct = float(row["final_score"]) * 100.0
-                st.markdown(
-                    f"**Match Score:** <span style='color:green; font-weight:bold'>{score_pct:.0f}%</span>",
-                    unsafe_allow_html=True,
-                )
+                a, b = st.columns([0.88, 0.12], vertical_alignment="center")
+                with a:
+                    st.markdown(
+                        f"**Match Score:** <span style='color:green; font-weight:bold'>{score_pct:.0f}%</span>",
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("Peek behind the score: see how your categories shape this match.")
+                with b:
+                    with st.popover("❓"):
+                        w_unit = weights_to_unit(st.session_state.get("weights", {}))
+                        contrib = {
+                            "Safety": float(row.get("safety_tugo_score", 0.0)) * float(w_unit.get("safety_tugo", 0.0)),
+                            "Cost": float(row.get("cost_score", 0.0)) * float(w_unit.get("cost", 0.0)),
+                            "Restaurant": float(row.get("restaurant_value_score", 0.0)) * float(w_unit.get("restaurant", 0.0)),
+                            "Groceries": float(row.get("groceries_value_score", 0.0)) * float(w_unit.get("groceries", 0.0)),
+                            "Rent": float(row.get("rent_score", 0.0)) * float(w_unit.get("rent", 0.0)),
+                            "Purchasing power": float(row.get("purchasing_power_score", 0.0)) * float(w_unit.get("purchasing_power", 0.0)),
+                            "QoL": float(row.get("qol_score", 0.0)) * float(w_unit.get("qol", 0.0)),
+                            "Health care": float(row.get("health_care_score", 0.0)) * float(w_unit.get("health_care", 0.0)),
+                            "Clean air": float(row.get("clean_air_score", 0.0)) * float(w_unit.get("clean_air", 0.0)),
+                            "Culture": float(row.get("culture_score", 0.0)) * float(w_unit.get("culture", 0.0)),
+                            "Weather": float(row.get("weather_score", 0.0)) * float(w_unit.get("weather", 0.0)),
+                            "Luxury": float(row.get("luxury_price_score", 0.0)) * float(w_unit.get("luxury_price", 0.0)),
+                            "Hidden gem": float(row.get("hidden_gem_score", 0.0)) * float(w_unit.get("hidden_gem", 0.0)),
+                            "Astro": float(row.get("astro_score", 0.0)) * float(w_unit.get("astro", 0.0)),
+                            "Jitter": float(row.get("jitter_score", 0.0)) * float(w_unit.get("jitter", 0.0)),
+                        }
+                        denom = sum(contrib.values())
+                        if denom > 0:
+                            pct = {k: 100.0 * v / denom for k, v in contrib.items() if v > 0}
+                            top_parts = sorted(pct.items(), key=lambda kv: kv[1], reverse=True)[:10]
+                            st.write(" • ".join([f"{k} {v:.0f}%" for k, v in top_parts]))
+                        else:
+                            st.write("No active weights.")
 
                 if pd.notnull(row.get("flight_price")):
                     rate = st.session_state.get("currency_rate", 1.0)
@@ -1447,7 +1447,8 @@ def show_results_step():
                     st.markdown(f"✈️ Est. Flight: **{symbol}{converted_price:.0f}**", help=tooltip)
 
             with c3:
-                if st.button("View Details", key=f"details_{row['iso2']}"):
+                # ✅ Fix duplicate keys when iso2 duplicates exist (due to joins)
+                if st.button("View Details", key=f"details_{row['iso2']}_{i}"):
                     st.session_state.selected_country = row
                     st.session_state.step = 6
                     st.rerun()
@@ -1460,15 +1461,15 @@ def show_results_step():
 def show_dashboard_step():
     country = st.session_state.selected_country
     topl, topm, topr = st.columns([2, 1, 1])
-    
+
     with topl:
         st.markdown(f"### 📋 Dashboard: {country['country_name']}")
-    
+
     with topm:
         if st.button("⬅️ Back to Results", use_container_width=True):
             st.session_state.step = 5
             st.rerun()
-    
+
     with topr:
         if st.button("🔄 Start Over", use_container_width=True):
             st.session_state.clear()
@@ -1492,7 +1493,6 @@ def show_dashboard_step():
             st.dataframe(details["unesco"], use_container_width=True)
 
     with tab4:
-        # ---- derive defaults from your app-wide dates ----
         start_date = st.session_state.get("start_date")
         end_date = st.session_state.get("end_date")
 
@@ -1503,26 +1503,36 @@ def show_dashboard_step():
             except Exception:
                 days_default = 7
 
-        # ---- derive ISO3 from selected country ----
         iso3 = country.get("iso3")
         if not iso3:
             st.warning("No ISO3 found for this country → cannot run the cost estimator.")
         else:
+            # ============================================================
+            # ✅ FIX 1: Reset Cost Estimator state when country changes
+            # ============================================================
+            prev_iso3 = st.session_state.get("ce_active_iso3")
+            if prev_iso3 != iso3:
+                # clear all cost-estimator widget state (safe + simple)
+                for k in list(st.session_state.keys()):
+                    if k.startswith("ce_"):
+                        del st.session_state[k]
+                st.session_state["ce_active_iso3"] = iso3
+                st.rerun()
+
             render_cost_estimator(
                 iso3=iso3,
-                days_default=days_default,   # <-- THIS is the default you asked about
+                days_default=days_default,
                 adults_default=2,
                 kids_default=0,
-                # db_path="unified_country_database.db",  # only if you want to force a path
+                db_path=data_manager.db_path,
+                key_prefix=f"ce_{iso3}",
             )
 
-    # Flights (kept)
     with tab5:
-        if 'search_expanded' not in st.session_state: 
+        if 'search_expanded' not in st.session_state:
             st.session_state.search_expanded = True
-        
+
         if 'expander_label' not in st.session_state:
-            # Initial default label
             d_orig = st.session_state.get('origin_iata', 'Origin')
             d_dest = country['country_name']
             st.session_state.expander_label = f"Flight Search Configuration"
@@ -1531,24 +1541,22 @@ def show_dashboard_step():
         if 'search_count' not in st.session_state:
             st.session_state.search_count = 0
 
-        # Append invisible characters (\u200b) to change the label's identity.
-        # This forces the expander to re-render as a 'new' widget and respect expanded=False.
         unique_label = st.session_state.expander_label + ("\u200b" * st.session_state.search_count)
         with st.expander(unique_label, expanded=st.session_state.search_expanded):
             trip_type = st.selectbox("Trip Type", ["Round Trip", "One Way"], key="search_trip_type")
 
             all_airports = data_manager.get_airports()
             dest_airports = data_manager.get_airports(country['iso2'])
-            
+
             c1, col2, col3 = st.columns(3)
             default_origin = st.session_state.get('origin_iata', 'FRA')
             origin_index = all_airports[all_airports['iata_code'] == default_origin].index[0] if not all_airports[all_airports['iata_code'] == default_origin].empty else 0
             orig = c1.selectbox("Flying from:", all_airports['display'], index=int(origin_index), key="manual_orig")
             dest = col2.selectbox("Flying to:", dest_airports['display'], key="manual_dest")
-            
+
             s_date = st.session_state.get('start_date', datetime.date.today() + datetime.timedelta(days=14))
             e_date = st.session_state.get('end_date', datetime.date.today() + datetime.timedelta(days=17))
-            
+
             if trip_type == "Round Trip":
                 dates = col3.date_input("Vacation Dates:", [s_date, e_date], key="manual_dates")
             else:
@@ -1562,13 +1570,12 @@ def show_dashboard_step():
             non_stop = c8.checkbox("Non-stop", key="manual_non_stop")
 
             if st.button("Search Flights 🚀", use_container_width=True, key="manual_search_btn"):
-                # Update the stable label only on search
                 l_orig = st.session_state.manual_orig
                 l_dest = st.session_state.manual_dest
                 t_str = f"{st.session_state.manual_adults} Adult(s)"
                 if st.session_state.manual_children > 0: t_str += f", {st.session_state.manual_children} Child(ren)"
                 if st.session_state.manual_infants > 0: t_str += f", {st.session_state.manual_infants} Infant(s)"
-                
+
                 st.session_state.expander_label = f"{l_orig} - {l_dest}  \u2003·\u2003  {t_str}  \u2003·\u2003  {st.session_state.manual_class}"
                 st.session_state.sort_by = "Price"
                 st.session_state.search_count += 1
@@ -1578,7 +1585,6 @@ def show_dashboard_step():
                 st.session_state.last_search_dest = st.session_state.manual_dest
                 st.rerun()
 
-        # --- Search Execution Logic (Outside Expander) ---
         if st.session_state.manual_search_triggered:
             st.session_state.manual_search_triggered = False
             img_placeholder = st.empty()
@@ -1586,22 +1592,20 @@ def show_dashboard_step():
             dest_val = st.session_state.manual_dest
             dates_val = st.session_state.manual_dates
             st.session_state.traveler_counts = {"ADULT": st.session_state.manual_adults, "CHILD": st.session_state.manual_children, "INFANT": st.session_state.manual_infants}
-            
+
             imgs = [country.get('img_1'), country.get('img_2'), country.get('img_3')]
             imgs = [img for img in imgs if img]
             random.shuffle(imgs)
-            
-            # Extract start date (dates_val is a list for Round Trip, single object for One Way)
+
             if isinstance(dates_val, (list, tuple)):
                 start_d = dates_val[0]
             else:
                 start_d = dates_val
 
             token = amadeus.get_amadeus_access_token(AMADEUS_API_KEY, AMADEUS_API_SECRET)
-            all_res = {"data": [], "dictionaries": {"carriers": {}}}
             params = {
-                "originLocationCode": orig_val[-4:-1], 
-                "destinationLocationCode": dest_val[-4:-1], 
+                "originLocationCode": orig_val[-4:-1],
+                "destinationLocationCode": dest_val[-4:-1],
                 "departureDate": start_d.strftime("%Y-%m-%d"),
                 "returnDate": dates_val[1].strftime("%Y-%m-%d") if trip_type == "Round Trip" and len(dates_val) > 1 else None,
                 "returnDate": dates_val[1].strftime("%Y-%m-%d") if trip_type == "Round Trip" and len(dates_val) > 1 else None,
@@ -1609,11 +1613,10 @@ def show_dashboard_step():
                 "travelClass": st.session_state.manual_class, "nonStop": st.session_state.manual_non_stop,
                 "currencyCode": "USD" if st.session_state.origin_iata == "ATL" else "EUR"
             }
-            
-            # Run search in a separate thread to allow slideshow updates
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(amadeus.search_flight_offers, token, params)
-                
+
                 img_idx = 0
                 while not future.done():
                     if imgs:
@@ -1624,35 +1627,31 @@ def show_dashboard_step():
                                 <img src="{img_url}" style="width:100%; max-height:700px; object-fit:cover; border-radius:12px; margin-bottom:10px;">
                                 <p style="color:gray; font-style:italic;">Searching for the best flights...</p>
                             </div>
-                            """, 
+                            """,
                             unsafe_allow_html=True
                         )
                         img_idx += 1
-                    
-                    # Wait a bit before next image, checking for completion frequently
-                    for _ in range(50):  # 5 seconds total sleep
+
+                    for _ in range(50):
                         if future.done(): break
                         time.sleep(0.1)
                     img_placeholder.empty()
 
-            # Capture the actual result from the thread
             try:
                 st.session_state.flight_results = future.result()
             except Exception as e:
                 st.error(f"Flight search failed: {e}")
                 st.session_state.flight_results = {"data": []}
-        
+
         flight_results = st.session_state.get('flight_results')
         if flight_results:
             if flight_results.get('data'):
                 maps = data_manager.get_iata_mappings()
                 carriers = st.session_state.flight_results['dictionaries']['carriers']
-                
-                # Process to DF for filtering/sorting
+
                 processed_data = []
                 for idx, offer in enumerate(st.session_state.flight_results['data']):
                     outbound = offer['itineraries'][0]
-                    # For sorting/displaying, we use the outbound departure time
                     processed_data.append({
                         'idx': idx,
                         'Price': float(offer['price']['total']),
@@ -1708,7 +1707,7 @@ def show_dashboard_step():
                             with st.container(border=True):
                                 for i, itin in enumerate(itineraries):
                                     if i == 1: st.markdown("---")
-                                
+
                                     c1, c2 = st.columns([3, 1])
                                     with c1:
                                         label = "🛫 Outbound" if len(itineraries) > 1 and i == 0 else ("🛬 Return" if i == 1 else "✈️ Flight")
@@ -1762,10 +1761,7 @@ def show_dashboard_step():
                 orig_label = st.session_state.get('last_search_origin', 'Origin')
                 dest_label = st.session_state.get('last_search_dest', 'Destination')
                 st.warning(f"No flights found for **{orig_label}** ✈️ **{dest_label}** for your selected vacation time. Please select a different airport or a different vacation time.")
-                                                    
-    if st.button("← Back to Results"):
-        st.session_state.step = 5
-        st.rerun()
+
 
 def show_booking_step():
     st.header("Confirm Your Booking")
@@ -1777,7 +1773,6 @@ def show_booking_step():
     st.write(f"Total Price: **{symbol}{offer['price']['total']}**")
 
     with st.form("traveler_form"):
-        # Collect contact info once (usually required for the primary traveler)
         email = st.text_input("Contact Email Address")
 
         travelers = []
@@ -1789,12 +1784,12 @@ def show_booking_step():
                 f_name = fn.text_input(f"First Name", key=f"fn_{idx}")
                 l_name = ln.text_input(f"Last Name", key=f"ln_{idx}")
                 d_o_b = dob_col.date_input("Date of Birth", value=datetime.date(1990, 1, 1), key=f"dob_{idx}", min_value=datetime.date(1920, 1, 1), max_value=datetime.date.today())
-                
+
                 travelers.append({
                     "id": str(idx),
                     "dateOfBirth": d_o_b.strftime("%Y-%m-%d"),
                     "name": {"firstName": f_name.upper(), "lastName": l_name.upper()},
-                    "gender": "MALE", # Simplified for this UI
+                    "gender": "MALE",
                     "contact": {
                         "emailAddress": email if email else "traveler@example.com",
                         "phones": [{"deviceType": "MOBILE", "countryCallingCode": "1", "number": "123456789"}]
@@ -1809,7 +1804,7 @@ def show_booking_step():
             else:
                 token = amadeus.get_amadeus_access_token(AMADEUS_API_KEY, AMADEUS_API_SECRET)
                 booking_res = amadeus.create_flight_order(token, offer, travelers)
-                
+
                 if booking_res and 'data' in booking_res:
                     st.session_state.confirmed_booking = booking_res
                     st.session_state.step = 8
@@ -1819,11 +1814,9 @@ def show_booking_step():
                         for err in booking_res['errors']:
                             detail = err.get('detail', 'Unknown validation error')
                             pointer = err.get('source', {}).get('pointer', '')
-                            
-                            # Parse the Amadeus pointer (e.g., /data/travelers[0]) to identify the passenger
+
                             match = re.search(r'travelers\[(\d+)\]|travelerPricings\[(\d+)\]', pointer)
                             if match:
-                                # Amadeus uses 0-based indexing; we add 1 for the user-facing Passenger number
                                 idx_str = match.group(1) or match.group(2)
                                 p_num = int(idx_str) + 1
                                 if "lastName format is invalid" in detail:
@@ -1844,6 +1837,7 @@ def show_booking_step():
         st.session_state.step = 6
         st.rerun()
 
+
 def show_confirmation_step():
     if 'confirmed_booking' in st.session_state:
         st.balloons(); st.success("🎉 Booking Confirmed!")
@@ -1855,7 +1849,6 @@ def show_confirmation_step():
         st.success("✅ Flight added to your Google Calendar!")
     if not st.session_state.get('google_creds') and st.button("Add to Google Calendar 📅"):
         flow = calendar_client.get_google_flow(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI)
-        # Pack both the offer AND the booking into the state so they survive the redirect
         state_payload = {
             "offer": st.session_state.priced_offer,
             "booking": st.session_state.confirmed_booking
@@ -1871,34 +1864,31 @@ def show_confirmation_step():
         st.session_state.clear()
         st.rerun()
 
+
 # =============================
 # APP ROUTER
 # =============================
 def run_app():
     global data_manager
-    # Handle Google OAuth Redirect
+
     q = st.query_params
     if "code" in q and 'google_creds' not in st.session_state:
-        # Ensure libs are loaded before processing OAuth callback (which uses data_manager)
         if "data_manager" not in globals():
             load_heavy_libs_dynamically()
             data_manager = DataManager()
             st.session_state.libs_loaded = True
         flow = calendar_client.get_google_flow(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI)
         st.session_state.google_creds = calendar_client.get_credentials_from_code(flow, q.get("state"), q.get("code"))
-        
-        # Recover offer and create event
+
         state_decoded = json.loads(base64.urlsafe_b64decode(q["state"]).decode())
         offer = state_decoded.get("offer")
         booking = state_decoded.get("booking")
-        
-        # Restore these to session state so the UI doesn't crash
+
         st.session_state.priced_offer = offer
         st.session_state.confirmed_booking = booking
         maps = data_manager.get_iata_mappings()
         service = calendar_client.get_calendar_service(st.session_state.google_creds)
-        
-        # Step A: Prepare data locally (Fast CPU operation)
+
         events_to_create = []
         for itin in offer['itineraries']:
             seg = itin['segments']
@@ -1912,23 +1902,17 @@ def run_app():
                 "end_tz": maps['tz'].get(seg[-1]['arrival']['iataCode'], "UTC")
             })
 
-        # Step B: Execute Batch (Single HTTP request)
         calendar_client.create_calendar_events_batch(service, events_to_create)
 
         st.query_params.clear()
         st.session_state.step = 8
+
     st.markdown('<div class="main-header">Your Next Adventure Awaits</div>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">A personalized travel planner for your individual needs.</p>', unsafe_allow_html=True)
 
-    # session init
     if "step" not in st.session_state:
         st.session_state.step = 1
 
-    # ==========================================
-    # 🚦 ROUTING LOGIC (The Performance Fix)
-    # ==========================================
-    
-    # If we are deeper in the app (Step > 1), we MUST load everything.
     if st.session_state.step > 1 or "libs_loaded" in st.session_state:
         load_heavy_libs_dynamically()
         data_manager = DataManager()
@@ -1947,7 +1931,6 @@ def run_app():
     if "prefs" not in st.session_state:
         st.session_state.prefs = {
             "target_temp": 25,
-            "hidden_gem_mode": False,
             "gem_seed": random.randint(1, 10_000_000),
             "astro_seed": random.randint(1, 10_000_000),
             "jitter_seed": random.randint(1, 10_000_000),
@@ -1965,7 +1948,11 @@ def run_app():
     if "lgbtq_filter_active" not in st.session_state:
         st.session_state.lgbtq_filter_active = False
 
-    # routing
+    if "swipe_mode_chosen" not in st.session_state:
+        st.session_state.swipe_mode_chosen = False
+    if "active_swipe_cards" not in st.session_state:
+        st.session_state.active_swipe_cards = []
+
     if st.session_state.step == 1:
         render_profile_ui()
     elif st.session_state.step == 2:

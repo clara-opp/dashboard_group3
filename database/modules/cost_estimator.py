@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 
+
 # ============================================================
 # Public API (this is what travel_planner imports)
 # ============================================================
@@ -99,11 +100,12 @@ def render_cost_estimator(
             "Represents leisure spending using common price anchors such as cinema, fitness, and sports services as a proxy for overall leisure costs."
         ),
         "Shopping & Souvenirs": (
-            "Estimates incidental and discretionary spending using stable international price anchors such as common clothing items."
+            "Estimates incidental and discretionary spending using stable international retail price anchors. "
+            "We include a small daily 'impulse' proxy (e.g., cigarettes) plus occasional purchases (e.g., clothing/shoes)."
         ),
     }
 
-    # ---- Updated base levels (your latest choices) ----
+    # ---- base levels ----
     DEFAULT_ITEMS = {
         "Food & Drinks": [
             ("Meal at an Inexpensive Restaurant", "per_person_per_day", 1.00),
@@ -125,9 +127,10 @@ def render_cost_estimator(
             ("Tennis Court Rental (1 Hour, Weekend)", "per_person_per_week", 0.50),
         ],
         "Shopping & Souvenirs": [
-            ("Jeans (Levi's 501", "per_item", 0.50),
-            ("Summer Dress in a Chain Store", "per_item", 0.50),
-            ("Nike Running Shoes", "per_item", 0.50),
+            ("Jeans (Levi's 501", "per_person_per_week", 0.20),
+            ("Summer Dress in a Chain Store", "per_person_per_week", 0.20),
+            ("Cigarettes (Pack of 20, Marlboro)", "per_person_per_day", 0.1),
+            ("Nike Running Shoes", "per_person_per_month", 0.20),
         ],
         "Accommodation": [
             ("1 Bedroom Apartment in City Centre", "per_month_household", 1.0),
@@ -160,16 +163,16 @@ def render_cost_estimator(
         return str(here / db_name)
 
     @st.cache_data(show_spinner=False)
-    def load_exchange_rates(_db_path: str) -> pd.DataFrame:
-        with sqlite3.connect(_db_path) as conn:
+    def load_exchange_rates(db_path: str) -> pd.DataFrame:
+        with sqlite3.connect(db_path) as conn:
             return pd.read_sql(
                 "SELECT currency, one_eur_to_currency, one_usd_to_currency FROM numbeo_exchange_rates",
                 conn,
             )
 
     @st.cache_data(show_spinner=False)
-    def load_country_prices(_db_path: str, _iso3: str) -> pd.DataFrame:
-        with sqlite3.connect(_db_path) as conn:
+    def load_country_prices(db_path: str, iso3: str) -> pd.DataFrame:
+        with sqlite3.connect(db_path) as conn:
             df = pd.read_sql(
                 """
                 SELECT
@@ -185,7 +188,7 @@ def render_cost_estimator(
                 WHERE iso3 = ?
                 """,
                 conn,
-                params=(_iso3,),
+                params=(iso3,),
             )
         for c in ["lowest_price", "average_price", "highest_price"]:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -217,7 +220,6 @@ def render_cost_estimator(
 
     def money(x: float, prefix: str) -> str:
         try:
-            # german formatting (comma decimal)
             return f"{prefix}{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         except Exception:
             return f"{prefix}{x}"
@@ -325,8 +327,6 @@ def render_cost_estimator(
             unit_type = str(r.get("unit_type", "per_trip"))
             base_qty = clamp_nonneg(r.get("base_qty", 0.0))
 
-            # Core logic:
-            # final amount = reference amount * spending multiplier * trip scaling
             spending_multiplier = dial
             reference_amount = base_qty
             final_amount = reference_amount * spending_multiplier
@@ -406,14 +406,12 @@ def render_cost_estimator(
 
         st.session_state[k("plan_df")] = None
 
-        # ---- NEW: days lock state ----
         st.session_state[k("unlock_days")] = False
         st.session_state[k("last_iso3")] = str(iso3)
         st.session_state[k("last_days_default")] = int(max(1, days_default))
 
     # ============================================================
     # Force re-lock when switching countries or trip duration changes
-    # (must happen BEFORE creating the Days slider)
     # ============================================================
     incoming_iso3 = str(iso3)
     incoming_days_default = int(max(1, days_default))
@@ -426,6 +424,7 @@ def render_cost_estimator(
         st.session_state[k("last_days_default")] = incoming_days_default
         st.session_state[k("unlock_days")] = False
         st.session_state[k("days")] = incoming_days_default
+        st.session_state[k("plan_df")] = None
 
     # ============================================================
     # Style / behaviour
@@ -435,7 +434,6 @@ def render_cost_estimator(
             return
         if st.session_state.get(k("travel_style")) != "Customised":
             st.session_state[k("travel_style")] = "Customised"
-            # IMPORTANT: also update the selectbox widget key (style_select)
             st.session_state[k("style_select")] = "Customised"
 
     def apply_style(style: str, prices_df_for_reset: pd.DataFrame):
@@ -444,14 +442,11 @@ def render_cost_estimator(
 
         st.session_state[k("_applying_style")] = True
 
-        # 1) set style state
         st.session_state[k("travel_style")] = style
         st.session_state[k("style_select")] = style
 
-        # 2) reset plan reference amounts to defaults (so presets truly revert everything)
         st.session_state[k("plan_df")] = build_default_plan(prices_df_for_reset)
 
-        # 3) set dial labels + dial multipliers
         labels = STYLE_DEFAULT_LABELS[style]
         for cat in CATEGORY_ORDER:
             lab = labels.get(cat, "Typical")
@@ -472,8 +467,6 @@ def render_cost_estimator(
         st.session_state[k("category_dials")][cat] = LABEL_TO_DIAL.get(label, 1.0)
         mark_customised()
 
-    # Accommodation proxy by people (auto 1BR vs 3BR) BUT still user can override via Advanced.
-    # We'll apply this only when plan exists and ONLY if user has not manually modified accommodation rows yet.
     def set_accommodation_proxy_by_people(adults: int, kids: int):
         persons = int(adults) + int(kids)
         use_3br = persons >= 3
@@ -495,13 +488,10 @@ def render_cost_estimator(
             elif "3 Bedroom Apartment in City Centre" in pat:
                 idx_3br = idx
 
-        # if both are manually set to something already, do not override here
-        # heuristic: if sum(base_qty) not in {0,1} -> user customised accommodation
         s = float(acc["base_qty"].sum())
         if s not in (0.0, 1.0):
             return
 
-        # auto pick (allow 0 overall if user sets both 0 in advanced; but auto default should choose one)
         if idx_1br is not None:
             plan.loc[idx_1br, "base_qty"] = 0.0
         if idx_3br is not None:
@@ -524,10 +514,8 @@ def render_cost_estimator(
         st.warning("No Numbeo price rows found for this country (ISO3).")
         return
 
-    # Build plan on first time
     if st.session_state.get(k("plan_df")) is None:
         st.session_state[k("plan_df")] = build_default_plan(prices_df)
-        # apply current preset (Balanced default)
         apply_style(st.session_state.get(k("travel_style"), "Balanced"), prices_df)
 
     # ============================================================
@@ -535,22 +523,18 @@ def render_cost_estimator(
     # ============================================================
     st.markdown("### 💰 Trip Cost Estimator")
 
-    # Trip setup
     c1, c2, c3 = st.columns([1.2, 1, 1])
     with c1:
-        # lock UI: checkbox like "Show details"
         st.checkbox(
             "Unlock Days",
             value=bool(st.session_state.get(k("unlock_days"), False)),
             key=k("unlock_days"),
         )
 
-        # If locked, always force slider value to trip length BEFORE widget creation
         if not st.session_state.get(k("unlock_days"), False):
             st.session_state[k("days")] = incoming_days_default
 
         st.caption("Tip: *Days* follows your trip dates by default — unlock to explore scenarios.")
-
         st.slider("Days", 1, 60, key=k("days"))
 
     with c2:
@@ -562,7 +546,6 @@ def render_cost_estimator(
     adults = int(st.session_state[k("adults")])
     kids = int(st.session_state[k("kids")])
 
-    # Sidebar-ish controls (inline)
     top_left, top_right = st.columns([1.4, 1.0])
     with top_left:
         st.markdown("#### 🧠 Travel style")
@@ -571,7 +554,6 @@ def render_cost_estimator(
         if cur_style not in TRAVEL_STYLES:
             cur_style = "Balanced"
 
-        # Ensure widget has a valid current value without using index (avoids yellow warning)
         if k("style_select") not in st.session_state:
             st.session_state[k("style_select")] = cur_style
         elif st.session_state[k("style_select")] not in TRAVEL_STYLES:
@@ -603,17 +585,14 @@ def render_cost_estimator(
             key=k("adv_checkbox"),
         )
 
-    # Auto accommodation proxy (default only)
     set_accommodation_proxy_by_people(adults=adults, kids=kids)
 
-    # Category dials
     st.markdown("#### 🎛️ Category dials")
     st.caption("Reference amounts describe a typical traveller. Spending levels scale these assumptions to produce the final amounts used for cost calculation.")
 
     cols = st.columns(5)
     for i, cat in enumerate(CATEGORY_ORDER):
         with cols[i]:
-            # title row: name + ❓ popover (saves space)
             c_name, c_info = st.columns([0.82, 0.18], vertical_alignment="center")
             with c_name:
                 st.markdown(f"**{cat}**")
@@ -621,7 +600,6 @@ def render_cost_estimator(
                 with st.popover("❓"):
                     st.markdown(CATEGORY_EXPLANATIONS.get(cat, ""))
 
-            # Ensure the widget key exists BEFORE widget is created (no 'value=' needed)
             if k(f"dial_label_{cat}") not in st.session_state or st.session_state[k(f"dial_label_{cat}")] not in DIAL_LABELS:
                 st.session_state[k(f"dial_label_{cat}")] = "Typical"
 
@@ -634,7 +612,6 @@ def render_cost_estimator(
                 label_visibility="collapsed",
             )
 
-    # Advanced: edit base quantities
     if st.session_state.get(k("advanced_mode"), False):
         st.markdown("#### 🧰 Advanced: Edit reference amounts")
         st.caption("Setting a reference amount to 0 explicitly excludes an item from your trip.")
@@ -656,7 +633,6 @@ def render_cost_estimator(
                         st.caption(f"{row.get('unit_type')}")
 
                     with right:
-                        # Accommodation: integer only, but allow 0 (camper/relatives)
                         is_acc = (cat == "Accommodation")
 
                         if is_acc:
@@ -686,7 +662,6 @@ def render_cost_estimator(
 
         st.session_state[k("plan_df")] = plan_df
 
-    # Compute
     price_col = SCENARIO_TO_PRICE_COL.get(st.session_state.get(k("cost_scenario"), "Average"), "average_price")
 
     detailed, cat_local, cat_eur, local_currency = compute_costs(
@@ -706,7 +681,6 @@ def render_cost_estimator(
 
     missing_categories = [cat for cat in CATEGORY_ORDER if not category_has_any_price_data(detailed, cat)]
 
-    # Summary
     st.markdown("#### 🧾 Summary")
     total_local = sum(cat_local.values()) if cat_local else 0.0
     total_eur = sum(cat_eur.values()) if cat_eur else (total_local / rate if rate else None)
@@ -734,7 +708,6 @@ def render_cost_estimator(
                 + ", ".join(missing_categories)
             )
 
-    # Category breakdown
     st.markdown("#### 🧩 Category Breakdown")
     cards = st.columns(5)
     for i, cat in enumerate(CATEGORY_ORDER):
@@ -754,8 +727,9 @@ def render_cost_estimator(
                 mult = float(st.session_state[k("category_dials")].get(cat, 1.0))
                 st.caption(f"{label} • x{mult:.2f}")
 
-    # Details (Advanced always shows, otherwise optional)
-    show_details = st.session_state.get(k("advanced_mode"), False) or st.checkbox("Show item details", value=False, key=k("show_details"))
+    show_details = st.session_state.get(k("advanced_mode"), False) or st.checkbox(
+        "Show item details", value=False, key=k("show_details")
+    )
     if show_details:
         st.markdown("#### 🔍 Item details")
 
@@ -764,7 +738,6 @@ def render_cost_estimator(
             "Trip quantity is the final quantity used for pricing after applying trip length and group size."
         )
 
-        # Accommodation-only comment (ONLY here, as requested)
         st.caption(
             "**Accommodation note:** Apartment rent is a *monthly* price. Trip quantity can be below 1 (e.g., 0.60) "
             "because we scale monthly rent by (days / 30)."
@@ -802,7 +775,6 @@ def render_cost_estimator(
                 if not category_has_any_price_data(detailed, cat):
                     st.info("No price data available for this category in the selected country.")
 
-                # nicer rounding
                 def r2(x):
                     if x is None or (isinstance(x, float) and pd.isna(x)):
                         return None
