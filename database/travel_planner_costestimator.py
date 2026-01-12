@@ -11,7 +11,7 @@ import sys
 import importlib
 from dotenv import load_dotenv
 from modules.cost_estimator import render_cost_estimator
-
+from modules.flight_search import render_flight_search
 
 # =============================
 # CONFIG
@@ -1508,7 +1508,7 @@ def show_dashboard_step():
             st.warning("No ISO3 found for this country → cannot run the cost estimator.")
         else:
             # ============================================================
-            # ✅ FIX 1: Reset Cost Estimator state when country changes
+            # Reset Cost Estimator state when country changes
             # ============================================================
             prev_iso3 = st.session_state.get("ce_active_iso3")
             if prev_iso3 != iso3:
