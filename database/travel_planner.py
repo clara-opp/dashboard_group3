@@ -1010,23 +1010,42 @@ def show_persona_step(data_manager):
         }),
     }
     
-    # Persona selection
-    persona = st.selectbox(
-        "Select a persona",
-        list(personas.keys()),
-        key="persona_select",
-        label_visibility="collapsed",
-    )
-    
-    # Store persona defaults
-    st.session_state["persona_defaults"] = personas[persona].copy()
-    
-    # Initialize weights if persona changed
-    if st.session_state.get("persona_active") != persona:
-        st.session_state["persona_active"] = persona
-        for wk in WEIGHT_KEYS:
-            st.session_state.pop(f"fadv_{wk}", None)
-        set_adv_from_weights(personas[persona])
+    # Initialize selected persona if not exists
+    if "selected_persona" not in st.session_state:
+        st.session_state.selected_persona = list(personas.keys())[0]
+
+    # Display persona cards in a grid (3 columns)
+    persona_list = list(personas.keys())
+    cols = st.columns(3)
+
+    for idx, persona_name in enumerate(persona_list):
+        col = cols[idx % 3]
+        is_selected = (st.session_state.selected_persona == persona_name)
+        
+        # Add checkmark to selected persona
+        label = f"✅ {persona_name}" if is_selected else persona_name
+        
+        with col:
+            if st.button(
+                label, 
+                key=f"persona_{idx}", 
+                use_container_width=True,
+                type="primary" if is_selected else "secondary"
+            ):
+                st.session_state.selected_persona = persona_name
+                st.session_state.persona_defaults = personas[persona_name].copy()
+                
+                # Wipe slider keys and apply new persona weights
+                for wk in WEIGHT_KEYS:
+                    st.session_state.pop(f"f_adv_{wk}", None)
+                set_adv_from_weights(personas[persona_name])
+                st.session_state["persona_active"] = persona_name
+                st.rerun()
+
+    # Show currently selected persona
+    st.info(f"✨ Selected: **{st.session_state.selected_persona}**")
+
+
     
     # Advanced customization expander
     with st.expander("⚙️ Advanced Customization (Optional)"):
@@ -1057,7 +1076,7 @@ def show_persona_step(data_manager):
         slider_row("Chaos Jitter", "jitter")
     
     # Next button
-    if st.button("Next: Personalize Your Trip"):
+    if st.button("🎯 Next: Swipe & Refine"):
         # Commit the weights
         committed = {k: clamp_int(st.session_state.get(f"fadv_{k}", 0)) for k in WEIGHT_KEYS}
         st.session_state.weights = normalize_weights_100(committed)
@@ -1396,7 +1415,7 @@ def show_astro_step(data_manager):
 
 def show_ban_choices_step(datamanager):
     st.markdown("### Step 6: 🚫 Ban List (Optional)")
-    st.caption("Do you want to exclude specific countries from your recommendations?")
+    st.caption("Do you want to exclude specific regions from your recommendations?")
 
     c1, c2 = st.columns(2)
     with c1:
