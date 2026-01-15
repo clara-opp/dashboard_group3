@@ -6,12 +6,14 @@
 - Flight Create Orders
 
 # Google APIs  #
-- Google Cloud API
-- Foursquare API
+- Google Calendar API
+- Google Places API
+- Google Routes API
 
 # Other APIs #
 - OpenAI API
-- unsplash API
+- unsplash API (Images)
+- Serper API (Web Search)
 
 ### Datasets ###
 - OpenTravelData (Github)

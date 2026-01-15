@@ -1,12 +1,15 @@
 import os
+import re
 import json
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from geopy.geocoders import Nominatim
 import pycountry
 import geonamescache
 import folium
 from streamlit_folium import st_folium
+from folium.plugins import BeautifyIcon, Fullscreen, MeasureControl
 from dotenv import load_dotenv
 from openai import OpenAI
 import polyline
@@ -30,7 +33,7 @@ def google_search_places(query: str, ll: str, radius: int = 4000, limit: int = 8
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.websiteUri,places.nationalPhoneNumber"
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.websiteUri,places.nationalPhoneNumber,places.photos"
     }
     
     data = {
@@ -51,12 +54,19 @@ def google_search_places(query: str, ll: str, radius: int = 4000, limit: int = 8
         r = requests.post(url, headers=headers, json=data, timeout=30)
         
         if r.status_code != 200:
+            print(f"GOOGLE ERROR: {r.status_code} - {r.text}")
             return {"error": True, "status": r.status_code, "body": r.text}
         
         response_data = r.json()
         results = []
         
         for p in response_data.get("places", []):
+            # Construct photo URL if available
+            photo_url = None
+            if p.get("photos"):
+                photo_name = p["photos"][0].get("name")
+                photo_url = f"https://places.googleapis.com/v1/{photo_name}/media?key={api_key}&maxWidthPx=400"
+
             # Extract location coordinates
             location = p.get("location", {})
             place_lat = location.get("latitude")
@@ -81,6 +91,7 @@ def google_search_places(query: str, ll: str, radius: int = 4000, limit: int = 8
                 "address": p.get("formattedAddress", ""),
                 "website": p.get("websiteUri", ""),
                 "tel": p.get("nationalPhoneNumber", ""),
+                "photo_url": photo_url,
                 "latitude": place_lat,
                 "longitude": place_lon,
             })
@@ -175,6 +186,20 @@ def get_route_osrm(coordinates):
     return []
 
 
+def serper_search_prices(query: str):
+    """Search the web for current prices, entrance fees, or menu costs."""
+    api_key = os.getenv("SERPER_API_KEY", "").strip()
+    if not api_key:
+        return {"error": "Missing SERPER_API_KEY"}
+    url = "https://google.serper.dev/search"
+    headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+    try:
+        r = requests.post(url, headers=headers, json={"q": query}, timeout=15)
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ---------- OpenAI tool-calling loop ----------
 def run_planner(messages, ll: str, radius: int, budget_eur: float):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
@@ -197,7 +222,21 @@ def run_planner(messages, ll: str, radius: int, budget_eur: float):
                     "required": ["query", "ll"],
                 },
             },
-        }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "serper_search_prices",
+                "description": "Search the web for real-world prices, entrance fees, or menu costs for a specific venue.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Price-related query, e.g., 'Louvre museum entrance fee 2024'."},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
     ]
     
     system_msg = {
@@ -207,10 +246,11 @@ def run_planner(messages, ll: str, radius: int, budget_eur: float):
             "Goal: propose a realistic day-trip itinerary within the user's fixed budget.\n"
             "Rules:\n"
             "- Use google_search_places to fetch real nearby places before recommending venues.\n"
-            "- Google Places results do not include exact prices; clearly mark any costs as estimates.\n"
-            "- Provide a per-item cost estimate and a running total not exceeding the budget.\n"
+            "- Use serper_search_prices to find actual costs for activities, entrance fees, or meals. You can call multiple tools in a single turn to be efficient.\n"
+            "- Target spending: Aim for a total cost between 85% and 90% of the budget. Never exceed the budget.\n"
             "- Return a compact itinerary with times, travel notes, and place addresses.\n"
-            "- IMPORTANT: When recommending a place, use its exact name from the search results so it can be mapped.\n"
+            "- Do not include 'Optional' sections, alternatives, or secondary choices. Provide one definitive plan.\n"
+            "- IMPORTANT: Use exact names from search results. Format the main itinerary as a numbered list (e.g., '1. Place Name').\n"
         ),
     }
     
@@ -224,7 +264,7 @@ def run_planner(messages, ll: str, radius: int, budget_eur: float):
     
     convo = [system_msg] + messages + [context_msg]
     
-    for _ in range(6):
+    for _ in range(12):
         resp = client.chat.completions.create(
             model=st.session_state.model,
             messages=convo,
@@ -257,6 +297,8 @@ def run_planner(messages, ll: str, radius: int, budget_eur: float):
                     )
                     if not out.get("error"):
                         found_places.extend(out.get("results", []))
+                elif fn == "serper_search_prices":
+                    out = serper_search_prices(query=args.get("query", ""))                        
                 else:
                     out = {"error": True, "message": f"Unknown tool: {fn}"}
                 
@@ -275,32 +317,232 @@ def run_planner(messages, ll: str, radius: int, budget_eur: float):
 
 
 # ---------- Streamlit UI ----------
-def get_category_style(categories):
-    cats_str = " ".join(categories).lower()
-    if "park" in cats_str or "nature" in cats_str or "garden" in cats_str:
-        return "tree", "green"
-    elif "cafe" in cats_str or "coffee" in cats_str or "bakery" in cats_str:
-        return "coffee", "beige"
-    elif "museum" in cats_str or "gallery" in cats_str or "history" in cats_str:
-        return "university", "purple"
-    elif "restaurant" in cats_str or "food" in cats_str:
-        return "cutlery", "red"
-    elif "bar" in cats_str or "pub" in cats_str:
-        return "glass", "darkblue"
-    elif "shop" in cats_str or "store" in cats_str:
-        return "shopping-bag", "orange"
-    return "map-marker", "blue"
+def create_styled_popup(place, index):
+    """Create beautiful HTML popup with CSS styling"""
+    img_html = f'<img src="{place["photo_url"]}" style="width:100%; height:140px; object-fit:cover; border-radius:4px; margin-bottom:8px;">' if place.get('photo_url') else ''
+    desc_html = f'<p style="margin: 8px 0; color: #666; font-size: 12px; font-style: italic;">{place["description"]}</p>' if place.get('description') else ''
+
+    popup_html = f"""
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; width: 280px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 12px; 
+                    border-radius: 8px 8px 0 0; 
+                    margin: -10px -10px 10px -10px;">
+            <h3 style="color: white; margin: 0; font-size: 16px; font-weight: 600;">
+                {index}. {place['name']}
+            </h3>
+        </div>
+        
+        <div style="padding: 0 5px;">
+            {img_html}
+            {desc_html}
+            <p style="margin: 8px 0; color: #444; font-size: 13px;">
+                <i class="fa fa-map-marker" style="color: #667eea; margin-right: 6px;"></i>
+                {place.get('address', 'Address not available')}
+            </p>
+            
+            {f'''<p style="margin: 8px 0; font-size: 13px;">
+                <i class="fa fa-phone" style="color: #667eea; margin-right: 6px;"></i>
+                <a href="tel:{place['tel']}" style="color: #667eea; text-decoration: none;">
+                    {place['tel']}
+                </a>
+            </p>''' if place.get('tel') else ''}
+            
+            {f'''<p style="margin: 8px 0; font-size: 13px;">
+                <i class="fa fa-globe" style="color: #667eea; margin-right: 6px;"></i>
+                <a href="{place['website']}" target="_blank" 
+                   style="color: #667eea; text-decoration: none;">
+                    Visit Website
+                </a>
+            </p>''' if place.get('website') else ''}
+        </div>
+    </div>
+    """
+    return popup_html
+
+
+def create_beautiful_map(map_info, radius, center_ll):
+    """Create an enhanced, beautiful map with professional styling"""
+    
+    # Use Google Maps style tiles
+    m = folium.Map(
+        location=center_ll,
+        zoom_start=14,
+        tiles='https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        attr='Google',
+        zoom_control=True,
+        scrollWheelZoom=True,
+        dragging=True,
+    )
+    
+    # Add alternative tile layers
+    folium.TileLayer(
+        tiles='CartoDB Positron',
+        name='Light Mode',
+        control=True
+    ).add_to(m)
+    
+    folium.TileLayer(
+        tiles='CartoDB Dark_Matter',
+        name='Dark Mode',
+        control=True
+    ).add_to(m)
+    
+    bounds = []
+    route_points = []
+    
+    # Add numbered markers for each place
+    for idx, p in enumerate(map_info["places"], 1):
+        lat, lon = p.get("latitude"), p.get("longitude")
+        if lat and lon:
+            route_points.append([lat, lon])
+            
+            popup_html = create_styled_popup(p, idx)
+            
+            icon = BeautifyIcon(
+                prefix='fa',
+                icon_shape='marker',
+                icon='',
+                background_color='red',
+                border_color='red',
+                text_color='white',
+                inner_icon_style='font-size:16px;padding-top:6px;'
+            )
+            
+            folium.Marker(
+                [lat, lon],
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=folium.Tooltip(
+                    f"<div style='font-family: sans-serif; font-weight: 600; font-size: 12px; color: #333; background-color: white; border: 2px solid #667eea; border-radius: 4px; padding: 2px 6px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis;'>{idx}. {p['name']}</div>",
+                    permanent=True,
+                    direction="right",
+                    offset=(0, -20),
+                    sticky=False,
+                    interactive=True,
+                    className="fixed-label"
+                ),
+                icon=icon
+            ).add_to(m)
+            
+            bounds.append([lat, lon])
+    
+    # Fit map bounds
+    if len(bounds) > 1:
+        m.fit_bounds(bounds, padding=(50, 50))
+    
+    # Draw the walking route - THIS IS THE KEY SECTION
+    if len(route_points) > 1:
+        # Try Google Routes API first
+        api_key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+        path_latlon = get_route_google(route_points, api_key)
+        
+        # Fallback to OSRM if Google fails
+        if not path_latlon:
+            path_latlon = get_route_osrm(route_points)
+        
+        # Draw the route
+        if path_latlon and len(path_latlon) > 0:
+            # Main route line (blue)
+            folium.PolyLine(
+                path_latlon,
+                color='#4A90E2',
+                weight=5,
+                opacity=0.8,
+                tooltip="Walking Route",
+                smooth_factor=1
+            ).add_to(m)
+            
+            # Shadow effect (darker blue behind)
+            folium.PolyLine(
+                path_latlon,
+                color='#2E5C8A',
+                weight=7,
+                opacity=0.3,
+                smooth_factor=1
+            ).add_to(m)
+        else:
+            # Fallback: draw straight lines if no route available
+            folium.PolyLine(
+                route_points,
+                color='#95A5A6',
+                weight=3,
+                dash_array='8, 4',
+                opacity=0.7,
+                tooltip="Direct path (route unavailable)"
+            ).add_to(m)
+    
+    # Add controls
+    folium.LayerControl(position='topright').add_to(m)
+    Fullscreen(position='topleft').add_to(m)
+    m.add_child(MeasureControl(primary_length_unit='meters', secondary_length_unit='miles'))
+    # Inject CSS directly into the map to hide the speech bubble
+    map_css = """
+    <style>
+    .leaflet-tooltip {
+        background: none !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        pointer-events: auto !important;
+        transition: none !important;
+        animation: none !important;
+        margin: 0 !important;
+    }
+    .leaflet-tooltip-pane {
+        transition: none !important;
+    }
+    .leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before,
+    .leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
+        display: none !important;
+    }
+    </style>
+    <script>
+    setTimeout(function() {
+        var maps = document.querySelectorAll('.leaflet-container');
+        maps.forEach(function(map_el) {
+            var map = map_el._leaflet_map;
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker && layer.getTooltip()) {
+                    var tt = layer.getTooltip();
+                    if (tt._container) {
+                        tt._container.style.cursor = 'pointer';
+                        tt._container.onclick = function() { layer.openPopup(); };
+                    }
+                }
+            });
+        });
+    }, 500);
+    </script>
+    """
+    m.get_root().header.add_child(folium.Element(map_css))
+
+
+    return m
 
 
 def main():
     load_dotenv()
     st.set_page_config(
-        page_title="Day Trip Planner (OpenAI + Google Maps)",
+        page_title="🗺️Trip Planner",
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
+    # CSS to perfectly align the columns and remove default margins
+    st.markdown("""
+        <style>
+            .stMarkdown h3 {
+                margin-top: 0rem !important;
+                padding-top: 0rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            [data-testid="stVerticalBlock"] > div:has(div[data-testid="stVerticalBlock"]) {
+                padding-top: 0rem !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
     
-    st.title("Day Trip Planner (Chat + Google Maps)")
+    st.title("🗺️Trip Planner")
     
     # API key checks
     if not os.getenv("OPENAI_API_KEY"):
@@ -312,21 +554,24 @@ def main():
         st.stop()
     
     with st.sidebar:
-        st.header("Trip settings")
+        st.header("🌍Trip settings")
         
-        with st.expander("🌍 Location Selection", expanded=True):
+        with st.container(border=True):
             country_list = sorted([c.name for c in pycountry.countries])
             selected_country = st.selectbox("Select Country", options=country_list, index=country_list.index("Germany"))
             
             gc = geonamescache.GeonamesCache()
             country_obj = pycountry.countries.get(name=selected_country)
             country_code = country_obj.alpha_2 if country_obj else "DE"
+
+            country_info = gc.get_countries().get(country_code)
+            capital_city = country_info.get('capital') if country_info else ""
             
             city_data = [c['name'] for c in gc.get_cities().values() if c['countrycode'] == country_code]
             city_list = sorted(list(set(city_data)))
             
             if city_list:
-                default_idx = city_list.index("Berlin") if "Berlin" in city_list else 0
+                default_idx = city_list.index(capital_city) if capital_city in city_list else 0
                 selected_city = st.selectbox("Select City", options=city_list, index=default_idx)
             else:
                 selected_city = st.text_input("Type City Name", value="Berlin")
@@ -340,7 +585,6 @@ def main():
             
             if location:
                 ll = f"{location.latitude},{location.longitude}"
-                st.success(f"Located: {location.latitude:.4f}, {location.longitude:.4f}")
             else:
                 st.error("Location not found. Using fallback.")
                 ll = "49.7500,8.6500"
@@ -348,11 +592,8 @@ def main():
             radius = st.slider("Search radius (m)", 500, 20000, 5000, step=500)
             budget = st.number_input("Budget (EUR)", min_value=0.0, value=40.0, step=5.0)
         
-        st.header("Model")
         if "model" not in st.session_state:
-            st.session_state.model = "gpt-4o-mini"
-        st.session_state.model = st.text_input("OpenAI model", value=st.session_state.model)
-        st.caption("Tip: Ask for a style (relaxed/packed), interests, and dietary needs.")
+            st.session_state.model = "gpt-5-nano-2025-08-07"
     
     # Chat state
     if "messages" not in st.session_state:
@@ -370,102 +611,82 @@ def main():
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        for m in st.session_state.messages:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"])
-        
-        prompt = st.chat_input("What kind of day trip do you want?")
-        
-        if prompt:
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+        # Scrollable container for chat history
+        with st.container(height=650):
+            for i, m in enumerate(st.session_state.messages):
+                is_last = (i == len(st.session_state.messages) - 1)
+                with st.chat_message(m["role"]):
+                    if is_last:
+                        # Invisible anchor for the scrolling script
+                        st.markdown('<div id="latest-message"></div>', unsafe_allow_html=True)
+                    st.markdown(m["content"])
+
+            prompt = st.chat_input("What kind of day trip do you want?")
+
+            if prompt:
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                
+                with st.chat_message("assistant"):
+                    with st.spinner("Planning your trip..."):
+                        planner_messages = [
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.messages
+                            if m["role"] in ("user", "assistant")
+                        ]
+                        
+                        answer, places = run_planner(planner_messages, ll=ll, radius=radius, budget_eur=budget)
+                        
+                        # Filter places mentioned in answer
+                        unique_places = {p["place_id"]: p for p in places}.values()
+                        
+                        # 1. Split text to ignore optional sections
+                        plan_text = re.split(r'(?i)\n\s*(?:Optional|Notes|Alternative|Expansion|Remaining budget)', answer)[0]
+                        # 2. Identify places mentioned in lines starting with "1.", "2.", etc.
+                        numbered_lines = re.findall(r'^\s*\d\.\s*(.*)', plan_text, re.MULTILINE)
+                        final_places = []
+                        for line in numbered_lines:
+                            for p in unique_places:
+                                if p["name"].lower() in line.lower():
+                                    if p not in final_places:
+                                        # Extract the "Why" description from the text following the place name
+                                        desc_match = re.search(fr"{re.escape(p['name'])}.*?Why:\s*(.*?)(?:\n|$)", answer, re.IGNORECASE | re.DOTALL)
+                                        p["description"] = desc_match.group(1).strip() if desc_match else ""
+                                        final_places.append(p)
+                                        break
+
+                        st.session_state.map_data = {"places": final_places, "center": ll}
+                        st.markdown(answer)
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                        st.rerun()
+
+        # JavaScript to snap the latest message to the top of the container
+        components.html(
+            """
+            <script>
+                var element = window.parent.document.getElementById('latest-message');
+                if (element) {
+                    element.scrollIntoView({behavior: 'smooth', block: 'start'});
+                }
+            </script>
+            """,
+            height=0
+        )
             
-            with st.chat_message("assistant"):
-                with st.spinner("Planning your trip..."):
-                    planner_messages = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.messages
-                        if m["role"] in ("user", "assistant")
-                    ]
-                    
-                    answer, places = run_planner(planner_messages, ll=ll, radius=radius, budget_eur=budget)
-                    
-                    # Filter places mentioned in answer
-                    unique_places = {p["place_id"]: p for p in places}.values()
-                    final_places = [
-                        p for p in unique_places
-                        if p["name"].lower() in answer.lower()
-                    ]
-                    
-                    st.session_state.map_data = {"places": final_places, "center": ll}
-                    st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                    st.rerun()
-    
     with col2:
-        st.subheader("Trip Map")
         map_info = st.session_state.map_data
         
         if map_info["center"]:
             center_ll = [float(x) for x in map_info["center"].split(",")]
-            m = folium.Map(location=center_ll, zoom_start=13, tiles="Cartodb Positron")
+            print(f"DEBUG: Number of places: {len(map_info['places'])}")
+            for i, p in enumerate(map_info["places"]):
+                print(f"  Place {i+1}: {p['name']} at {p.get('latitude')}, {p.get('longitude')}")
+            m = create_beautiful_map(map_info, radius, center_ll)
             
-            folium.Circle(
-                location=center_ll, radius=radius, color="#3388ff", weight=1,
-                fill=True, fill_color="#3388ff", fill_opacity=0.1,
-                tooltip=f"Search Radius: {radius}m"
-            ).add_to(m)
-            
-            folium.Marker(
-                center_ll, popup="Search Center", tooltip="Start Here",
-                icon=folium.Icon(color="black", icon="home", prefix="fa")
-            ).add_to(m)
-            
-            bounds = [center_ll]
-            route_points = [center_ll]
-            
-            for p in map_info["places"]:
-                lat, lon = p.get("latitude"), p.get("longitude")
-                if lat and lon:
-                    route_points.append([lat, lon])
-                    icon_name, icon_color = get_category_style(p.get("categories", []))
-                    
-                    popup_html = f"<b>{p['name']}</b><br>{p.get('address', '')}"
-                    folium.Marker(
-                        [lat, lon],
-                        popup=folium.Popup(popup_html, max_width=200),
-                        tooltip=p["name"],
-                        icon=folium.Icon(color=icon_color, icon=icon_name, prefix="fa")
-                    ).add_to(m)
-                    bounds.append([lat, lon])
-            
-            if len(bounds) > 1:
-                m.fit_bounds(bounds, padding=(30, 30))
-            
-            # Draw route
-            if len(route_points) > 1:
-                # Try Google Routes API first
-                api_key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
-                path_latlon = get_route_google(route_points, api_key)
-                
-                # Fallback to OSRM if Google fails
-                if not path_latlon:
-                    path_latlon = get_route_osrm(route_points)
-                
-                if path_latlon:
-                    folium.PolyLine(
-                        path_latlon, color="blue", weight=4, opacity=0.7,
-                        tooltip="Walking Path"
-                    ).add_to(m)
-                else:
-                    folium.PolyLine(
-                        route_points, color="gray", weight=2, dash_array="5, 5"
-                    ).add_to(m)
-            
-            st_folium(m, width="100%", height=600, key="persistent_map")
+            st_folium(m, width="100%", height=650, key="persistent_map")
         else:
-            st.info("The map will appear here once a trip is planned.")
+            st.info("🎯 The map will appear here once a trip is planned.")
 
 
 if __name__ == "__main__":
