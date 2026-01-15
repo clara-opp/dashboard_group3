@@ -222,6 +222,7 @@ def render_highlight_cards(country):
             else:
                 st.warning("💸 Premium destination")
     
+    
     with col2:
         with st.container(border=True):
             st.markdown("#### 🏥 Healthcare")
