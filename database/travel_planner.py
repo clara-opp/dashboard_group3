@@ -15,6 +15,7 @@ from modules.flight_search import (
     handle_google_oauth_callback,
 )
 from modules.country_overview import render_country_overview
+from modules.persona_selector import render_persona_step
 
 
 # ============================================================
@@ -960,150 +961,6 @@ def show_basic_info_step(data_manager):
         st.rerun()
 
 
-def show_persona_step(data_manager):
-    """Step 2: Choose traveler profile/persona"""
-    
-    st.markdown("### Choose Your Traveller Profile")
-    st.write("Pick a profile. Advanced Customization shows weights (0-100 points) that always sum to 100.")
-    
-    # Define personas
-    personas = {
-        "Story Hunter": normalize_weights_100({
-            "safety_tugo": 15, "culture": 22, "hiddengem": 14, "cost": 12,
-            "restaurant": 8, "groceries": 5, "weather": 10, "qol": 7,
-            "cleanair": 5, "purchasingpower": 2, "rent": 0, "healthcare": 0,
-            "luxuryprice": 0, "astro": 0, "jitter": 0
-        }),
-        "Family Fortress": normalize_weights_100({
-            "safety_tugo": 28, "healthcare": 14, "qol": 12, "cleanair": 12,
-            "weather": 10, "culture": 6, "cost": 8, "restaurant": 3,
-            "groceries": 3, "purchasingpower": 4, "rent": 0, "hiddengem": 0,
-            "luxuryprice": 0, "astro": 0, "jitter": 0
-        }),
-        "WiFi Goblin (Long stay)": normalize_weights_100({
-            "rent": 20, "purchasingpower": 14, "groceries": 10, "restaurant": 6,
-            "cost": 12, "safety_tugo": 14, "qol": 12, "cleanair": 6,
-            "weather": 4, "culture": 2, "hiddengem": 0, "healthcare": 0,
-            "luxuryprice": 0, "astro": 0, "jitter": 0
-        }),
-        "Comfort Snob": normalize_weights_100({
-            "qol": 20, "safety_tugo": 18, "cleanair": 12, "healthcare": 10,
-            "weather": 10, "culture": 6, "luxuryprice": 10, "restaurant": 4,
-            "purchasingpower": 4, "cost": 0, "groceries": 0, "rent": 0,
-            "hiddengem": 2, "astro": 0, "jitter": 0
-        }),
-        "Budget Goblin": normalize_weights_100({
-            "cost": 26, "groceries": 12, "restaurant": 10, "purchasingpower": 12,
-            "safety_tugo": 14, "weather": 8, "culture": 6, "cleanair": 6,
-            "qol": 4, "hiddengem": 2, "rent": 0, "healthcare": 0,
-            "luxuryprice": 0, "astro": 0, "jitter": 0
-        }),
-        "Clean Air & Calm": normalize_weights_100({
-            "cleanair": 24, "safety_tugo": 22, "qol": 12, "healthcare": 10,
-            "weather": 10, "cost": 10, "groceries": 4, "restaurant": 2,
-            "culture": 4, "hiddengem": 2, "purchasingpower": 0, "rent": 0,
-            "luxuryprice": 0, "astro": 0, "jitter": 0
-        }),
-        "Chaos Gremlin (but not stupid)": normalize_weights_100({
-            "hiddengem": 24, "culture": 10, "cost": 10, "restaurant": 6,
-            "weather": 4, "safety_tugo": 16, "qol": 6, "cleanair": 4,
-            "purchasingpower": 4, "jitter": 10, "astro": 6, "luxuryprice": 0,
-            "rent": 0, "healthcare": 0, "groceries": 0
-        }),
-    }
-    
-    # Initialize selected persona if not exists
-    if "selected_persona" not in st.session_state:
-        st.session_state.selected_persona = list(personas.keys())[0]
-
-    # Display persona cards in a grid (3 columns)
-    persona_list = list(personas.keys())
-    cols = st.columns(3)
-
-    for idx, persona_name in enumerate(persona_list):
-        col = cols[idx % 3]
-        is_selected = (st.session_state.selected_persona == persona_name)
-        
-        # Add checkmark to selected persona
-        label = f"✅ {persona_name}" if is_selected else persona_name
-        
-        with col:
-            if st.button(
-                label, 
-                key=f"persona_{idx}", 
-                use_container_width=True,
-                type="primary" if is_selected else "secondary"
-            ):
-                st.session_state.selected_persona = persona_name
-                st.session_state.persona_defaults = personas[persona_name].copy()
-                
-                # Wipe slider keys and apply new persona weights
-                for wk in WEIGHT_KEYS:
-                    st.session_state.pop(f"f_adv_{wk}", None)
-                set_adv_from_weights(personas[persona_name])
-                st.session_state["persona_active"] = persona_name
-                st.rerun()
-
-    # Show currently selected persona
-    st.info(f"✨ Selected: **{st.session_state.selected_persona}**")
-
-
-    
-    # Advanced customization expander
-    with st.expander("⚙️ Advanced Customization (Optional)"):
-        if st.button("Reset to Persona Defaults", use_container_width=True):
-            for wk in WEIGHT_KEYS:
-                st.session_state.pop(f"fadv_{wk}", None)
-            set_adv_from_weights(st.session_state["persona_defaults"])
-            st.rerun()
-        
-        total_live = sum(clamp_int(st.session_state.get(f"fadv_{k}", 0)) for k in WEIGHT_KEYS)
-        st.caption(f"Current sum: {total_live}/100")
-        
-        # Sliders for all weight categories
-        slider_row("Safety (TuGo Advisory)", "safety_tugo")
-        slider_row("Cost (Cheap is good)", "cost")
-        slider_row("Restaurant Value", "restaurant")
-        slider_row("Groceries Value", "groceries")
-        slider_row("Rent (Long stay)", "rent")
-        slider_row("Purchasing Power", "purchasingpower")
-        slider_row("Quality of Life", "qol")
-        slider_row("Health Care", "healthcare")
-        slider_row("Clean Air (Low pollution)", "cleanair")
-        slider_row("Culture (UNESCO)", "culture")
-        slider_row("Weather Fit", "weather")
-        slider_row("Luxury Price Vibe (High cost can be good)", "luxuryprice")
-        slider_row("Hidden Gem Spice", "hiddengem")
-        slider_row("Astro Spice", "astro")
-        slider_row("Chaos Jitter", "jitter")
-    
-    # Next button
-    if st.button("🎯 Next: Swipe & Refine"):
-        # Commit the weights
-        committed = {k: clamp_int(st.session_state.get(f"fadv_{k}", 0)) for k in WEIGHT_KEYS}
-        st.session_state.weights = normalize_weights_100(committed)
-        
-        # Set preferences
-        st.session_state.prefs = {
-            "targettemp": 25,
-            "foodstyle": None,
-            "nightstyle": None,
-            "movestyle": None,
-            "gemseed": st.session_state.get("gemseed", random.randint(1, 10000000)),
-            "astroseed": st.session_state.get("astroseed", random.randint(1, 10000000)),
-            "jitterseed": st.session_state.get("jitterseed", random.randint(1, 10000000)),
-        }
-        
-        # Reset swipe cards
-        st.session_state.swipe_mode_chosen = False
-        st.session_state.active_swipe_cards = []
-        st.session_state.card_index = 0
-        
-        st.session_state.step = 3
-        st.rerun()
-
-
-
 def _choose_swipe_cards(mode: str):
     all_cards = list(SWIPE_CARDS_ALL)
     if mode == "all":
@@ -1667,7 +1524,7 @@ def run_app():
     if step == 1:
         show_basic_info_step(data_manager)
     elif step == 2:
-        show_persona_step(data_manager)
+        render_persona_step(data_manager)
     elif step == 3:
         show_swiping_step()
     elif step == 4:
