@@ -5,8 +5,9 @@ import streamlit as st
 import pandas as pd
 import datetime
 from io import BytesIO
+from openai import OpenAI  
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
@@ -85,27 +86,48 @@ def render_quick_stats(country):
     m1, m2, m3, m4 = st.columns(4)
     
     with m1:
-        # Get safety score (1 = safest, 3 = most dangerous)
+        # Get safety score (0-1 = safest, 2 = caution, 3 = most dangerous)
         safety_score = country.get('tugo_score')
-        # ✅ GET ADVISORY FIRST - before any comparisons
         advisory = country.get('tugo_advisory_state', 'Unknown')
         advisory = str(advisory) if pd.notna(advisory) else 'Unknown'
         
-        # Option A: Convert to int for comparison
-        if safety_score is not None and pd.notna(safety_score):
-            safety_score = int(safety_score)
+        # ✅ FIX: If tugo_score is empty but advisory contains a number, use it
+        if (safety_score is None or pd.isna(safety_score)) and advisory.replace('.', '', 1).replace('-', '', 1).isdigit():
+            try:
+                safety_score = float(advisory)
+            except:
+                pass
         
-        if safety_score == 1:
-            emoji = "✅"
-            safety_desc = "Safe - Exercise normal precautions."
-        elif safety_score == 2:
-            emoji = "⚠️"
-            safety_desc = "Caution - Exercise increased caution due to risks."
-        elif safety_score == 3:
-            emoji = "🚨"
-            safety_desc = "High Risk - Reconsider travel due to serious safety concerns."
+        # Determine emoji and description based on score
+        if safety_score is not None and pd.notna(safety_score):
+            try:
+                safety_score = float(safety_score)
+                
+                if safety_score == 0.0:
+                    emoji = "🟢"
+                    safety_desc = "Very Safe - No significant travel warnings."
+                elif safety_score <= 1.0:
+                    emoji = "✅"
+                    safety_desc = "Safe - Exercise normal precautions."
+                elif safety_score <= 2.0:
+                    emoji = "⚠️"
+                    safety_desc = "Caution - Exercise increased caution due to risks."
+                else:  # safety_score >= 3.0
+                    emoji = "🚨"
+                    safety_desc = "High Risk - Reconsider travel due to serious safety concerns."
+            except (ValueError, TypeError):
+                # Fallback to text-based logic
+                if "exercise normal" in advisory.lower():
+                    emoji = "✅"
+                    safety_desc = "Safe - Exercise normal precautions."
+                elif "high degree" in advisory.lower() or "increased" in advisory.lower():
+                    emoji = "⚠️"
+                    safety_desc = "Caution - Exercise increased caution due to risks."
+                else:
+                    emoji = "⚠️"
+                    safety_desc = f"{advisory}"
         else:
-            # Fallback to text-based logic if score not available
+            # No score available - use text-based logic
             if "exercise normal" in advisory.lower():
                 emoji = "✅"
                 safety_desc = "Safe - Exercise normal precautions."
@@ -113,8 +135,8 @@ def render_quick_stats(country):
                 emoji = "⚠️"
                 safety_desc = "Caution - Exercise increased caution due to risks."
             else:
-                emoji = "🚨"
-                safety_desc = "High Risk - Reconsider travel due to serious safety concerns."
+                emoji = "⚠️"
+                safety_desc = f"{advisory}"
         
         st.metric("🛡️ Safety", emoji, help=f"{safety_desc}\n\nFull Advisory: {advisory}")
     
@@ -142,6 +164,7 @@ def render_quick_stats(country):
 
 
 
+
 def render_overview_tab(country, data_manager):
     """Main overview with visual cards and personalized info"""
     
@@ -157,9 +180,10 @@ def render_overview_tab(country, data_manager):
     
     st.markdown("---")
     
-    # Quick Safety & Health Info (no tables!)
-    st.markdown("### 📋 Quick Reference")
-    render_quick_reference(country, data_manager)
+    # Just show the tip without the full Quick Reference section
+    st.markdown("### 💡 Tip")
+    st.success("Use our Budget Planner, Flight Planner and AI Assistant to plan your trip!")
+
 
 
 def render_match_reasons(country):
@@ -215,9 +239,9 @@ def render_highlight_cards(country):
             budget_score = max(0, 150 - col_idx) / 150
             st.progress(min(budget_score, 1.0))
             st.caption(f"Cost of living: {col_idx:.0f} (100 = NYC)")
-            if col_idx < 60:
+            if col_idx < 50:
                 st.success("💰 Very affordable!")
-            elif col_idx < 90:
+            elif col_idx < 80:
                 st.info("💵 Moderate pricing")
             else:
                 st.warning("💸 Premium destination")
@@ -267,9 +291,9 @@ def render_highlight_cards(country):
             air_score = max(0, 100 - pol)
             st.progress(air_score/100)
             st.caption(f"Air quality: {air_score:.0f}/100")
-            if air_score > 70:
+            if air_score > 60:
                 st.success("🌿 Fresh air!")
-            elif air_score > 50:
+            elif air_score > 40:
                 st.info("🌤️ Moderate")
             else:
                 st.warning("😷 Consider air quality")
@@ -314,7 +338,7 @@ def render_quick_reference(country, data_manager):
         st.info("Consult your doctor for recommended vaccinations before travel.")
         
         st.markdown("**💡 Tip**")
-        st.success("Use the Budget Planner and Flight Search tabs to plan your trip!")
+        st.success("Use our Budget Planner, Flight Pleanner and AI Assistant to plan your trip!")
 
 
 
@@ -363,33 +387,47 @@ def render_chatbot_tab(country, openai_client):
     """AI-powered trip planning chatbot"""
     st.markdown("### 🤖 Your AI Travel Assistant")
     
-    # ✅ NEW: Highlight personalization
+    # ✅ Get all data FIRST before using it
     persona = st.session_state.get('selected_persona', 'Traveler')
     start_date = st.session_state.get('start_date', datetime.date.today())
     end_date = st.session_state.get('end_date', start_date + datetime.timedelta(days=7))
+    duration = (end_date - start_date).days
     
-    st.info(f"✨ **Personalized for you!** This assistant knows your travel style (*{persona}*), dates ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}), and preferences to give you tailored recommendations.")
+    # Get tarot info if exists
+    tarot_card = st.session_state.get('tarot_card', {})
+    tarot_hint = ""
+    if tarot_card.get('name'):
+        orientation = "reversed" if tarot_card.get('is_reversed') else "upright"
+        tarot_hint = f",  cosmic guidance **{tarot_card['name']}** ({orientation})"
     
-    st.caption(f"Ask me anything about planning your trip to {country['country_name']}!")
-    
+    # NOW you can use tarot_hint
+    st.info(f"✨ **Personalized for you!** This assistant knows your travel style (*{persona}*), dates ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}){tarot_hint}, and all of your other stated preferences to give you tailored recommendations.")
+        
     # Initialize chat history per country
     chat_key = f"chat_{country['iso3']}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
-        # Welcome message
-        duration = (end_date - start_date).days
+        
+        # Welcome message with all context
+        # Get top priorities
+        weights = st.session_state.get('weights', {})
+        top_priorities = sorted(
+            [(k.replace('_', ' ').title(), v) for k, v in weights.items() if v > 0.10],
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+        priorities_text = ", ".join([p[0] for p in top_priorities])
+
         st.session_state[chat_key].append({
             "role": "assistant",
-            "content": f"👋 Hi! I'm your personalized AI guide for **{country['country_name']}**!\n\n"
-                      f"I already know you're a **{persona}** traveling for **{duration} days** "
-                      f"from **{start_date.strftime('%b %d')} to {end_date.strftime('%b %d')}**. "
-                      f"I've studied your preferences and can provide tailored advice on:\n\n"
-                      "- 📍 Day-by-day itineraries matched to your interests\n"
-                      "- 🍽️ Restaurants & attractions fitting your budget\n"
-                      "- 🚇 Transportation tips & local navigation\n"
-                      "- 💡 Safety advice & cultural customs\n\n"
-                      "What would you like to explore first?"
+            "content": f"Hi! I'm your AI assistant for **{country['country_name']}**! I can help you with:\n\n"
+                    "- 📍 Day-by-day itineraries matched to your interests\n"
+                    "- 🍽️ Restaurants & attractions fitting your style\n"
+                    "- 🚇 Transportation tips for your pace\n"
+                    "- 💡 Safety advice & cultural tips\n\n"
+                    "What would you like to explore first?"
         })
+
     
     # Display chat history
     for msg in st.session_state[chat_key]:
@@ -416,43 +454,108 @@ def render_chatbot_tab(country, openai_client):
 
 
 def get_ai_travel_response(user_query, country, openai_client, chat_key):
-    """Generate AI response with country context"""
+    """Generate AI response with comprehensive user context"""
+    
+    # Core user profile
     persona = st.session_state.get('selected_persona', 'Traveler')
     start_date = st.session_state.get('start_date', datetime.date.today())
     end_date = st.session_state.get('end_date', start_date + datetime.timedelta(days=7))
     duration = (end_date - start_date).days
     
+    # Get user preferences from swipes
+    prefs = st.session_state.get('prefs', {})
+    target_temp = prefs.get('target_temp', 25)
+    food_style = prefs.get('foodstyle')
+    night_style = prefs.get('nightstyle')
+    move_style = prefs.get('movestyle')
+    
+    # Get weights to understand priorities
+    weights = st.session_state.get('weights', {})
+    top_priorities = sorted(
+        [(k, v) for k, v in weights.items() if v > 0.10],
+        key=lambda x: x[1],
+        reverse=True
+    )[:3]
+    priority_text = ", ".join([k.replace('_', ' ').title() for k, v in top_priorities])
+    
+    # Tarot/Astro context
+    tarot_card = st.session_state.get('tarot_card', {})
+    tarot_name = tarot_card.get('name')
+    tarot_travel_meaning = tarot_card.get('travel_meaning', '').strip()
+    is_reversed = tarot_card.get('is_reversed', False)
+    
+    # Build astro sentence if tarot was drawn
+    astro_sentence = ""
+    if tarot_name:
+        orientation = "reversed" if is_reversed else "upright"
+        astro_sentence = f"The cosmos blessed this journey with the {tarot_name} ({orientation}): \"{tarot_travel_meaning[:200]}...\""
+    
+    # Build preference summary
+    pref_summary = []
+    if food_style == 'eatout':
+        pref_summary.append("loves dining out at restaurants")
+    elif food_style == 'cook':
+        pref_summary.append("prefers cooking/groceries over restaurants")
+    
+    if night_style == 'party':
+        pref_summary.append("enjoys nightlife and party scenes")
+    elif night_style == 'chill':
+        pref_summary.append("prefers quiet evenings over nightlife")
+    
+    if move_style == 'walk':
+        pref_summary.append("likes walking and exploring on foot")
+    
+    if target_temp < 20:
+        pref_summary.append(f"enjoys cooler weather (~{target_temp}°C)")
+    elif target_temp > 26:
+        pref_summary.append(f"loves warm weather (~{target_temp}°C)")
+    
+    pref_text = "; ".join(pref_summary) if pref_summary else "balanced preferences"
+    
+    # Build comprehensive system prompt
     system_prompt = f"""You are an expert travel assistant helping plan a trip to {country['country_name']}.
 
-User Profile:
-- Traveler Type: {persona}
-- Trip Duration: {duration} days ({start_date} to {end_date})
+🧳 TRAVELER PROFILE:
+- Type: {persona}
+- Trip Duration: {duration} days ({start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')})
+- Top Priorities: {priority_text}
+- Specific Preferences: {pref_text}
+{f"- Cosmic Guidance: {astro_sentence}" if astro_sentence else ""}
+
+🌍 DESTINATION CONTEXT:
 - Safety Advisory: {country.get('tugo_advisory_state', 'Unknown')}
-- Budget Level: {'Budget-conscious' if 'Budget' in persona else 'Flexible'}
+- Climate: {country.get('climate_avg_temp_c', 'N/A')}°C average
+- UNESCO Sites: {country.get('unesco_count', 0)}
+- Cost of Living Index: {country.get('numbeo_cost_of_living_index', 'N/A')} (100 = NYC)
 
-Provide practical, personalized advice. Include:
-- Specific recommendations (places, restaurants, activities)
-- Practical tips (transportation, costs, timing)
-- Safety & cultural considerations
-- Day-by-day itinerary suggestions when asked
+📋 YOUR ROLE:
+Provide personalized, actionable travel advice that EXPLICITLY references their stated preferences. 
 
-Keep responses concise (200-300 words) and actionable. Use emojis for readability."""
+When making recommendations:
+1. **Always explain WHY** it matches their profile (e.g., "Since you're a {persona} who {pref_text}, I recommend...")
+2. **Reference their priorities** (they value: {priority_text})
+3. **Be specific**: Mention actual places, restaurants, neighborhoods, costs
+4. **Consider their timeline**: Plan within their {duration}-day window
+5. **Match their style**: Align recommendations with their persona and swipe choices
+
+Keep responses conversational, 250-350 words, and structure them well for readability."""
 
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                *[{"role": m["role"], "content": m["content"]} 
+                *[{"role": m["role"], "content": m["content"]}
                   for m in st.session_state[chat_key][-6:]],  # Last 3 exchanges
                 {"role": "user", "content": user_query}
             ],
             temperature=0.7,
-            max_tokens=500
+            max_tokens=600  # Increased for more detailed responses
         )
         return response.choices[0].message.content
     except Exception as e:
         return f"⚠️ Sorry, I couldn't process that. Error: {str(e)}"
+
 
 
 def render_pdf_tab(country, data_manager):
@@ -467,9 +570,10 @@ def render_pdf_tab(country, data_manager):
         st.markdown("""
         - ✅ Your match score & persona
         - ✅ Safety & health information
-        - ✅ Budget breakdown
+        - ✅ Cost of living index
         - ✅ Cultural highlights
-        - ✅ Travel tips
+        - ✅ Essential phrases in local language
+        - ✅ Personalized travel tips
         """)
     
     with col2:
@@ -511,15 +615,136 @@ def safe_format_number(value, field_name=None):
     except (ValueError, TypeError):
         return 'N/A'
 
+def get_pdf_ai_content(country):
+    """
+    Ask the OpenAI API for:
+    - romanized translations of fixed phrases into the main local language
+    - extra personalized tips for the PDF
+    Returns (translations_dict, extra_tips_list).
+    """
+    try:
+        client = OpenAI()  # uses OPENAI_API_KEY from env
+        persona = st.session_state.get('selected_persona', 'Traveler')
+        prefs = st.session_state.get('prefs', {})
+        weights = st.session_state.get('weights', {})
+        
+        target_temp = prefs.get('target_temp')
+        food_style = prefs.get('foodstyle')
+        night_style = prefs.get('nightstyle')
+        move_style = prefs.get('movestyle')
+        
+        top_priorities = sorted(
+            [(k, v) for k, v in weights.items() if v > 0.10],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:3]
+        priority_labels = [k.replace('_', ' ').title() for k, _ in top_priorities]
+        
+        # Build a compact traveler summary
+        pref_bits = []
+        if food_style:
+            pref_bits.append(f"food_style={food_style}")
+        if night_style:
+            pref_bits.append(f"night_style={night_style}")
+        if move_style:
+            pref_bits.append(f"move_style={move_style}")
+        if isinstance(target_temp, (int, float)):
+            pref_bits.append(f"target_temp={target_temp}C")
+        if priority_labels:
+            pref_bits.append("priorities=" + ", ".join(priority_labels))
+        
+        traveler_summary = "; ".join(pref_bits) if pref_bits else "balanced preferences"
+        
+        local_language = (
+            country.get('official_language')
+            or country.get('language')
+            or "the main local language of this country"
+        )
+        
+        system_prompt = (
+            "You are a translation and travel tips assistant. "
+            "You MUST respond with ONLY valid JSON, no markdown formatting, no code blocks, no extra text. "
+            "For translations, provide ONLY romanized/transliterated versions using Latin characters."
+        )
+        
+        user_prompt = f"""Country: {country.get('country_name')}
+Main language: {local_language}
+Traveler persona: {persona}
+Traveler profile: {traveler_summary}
+
+1) Translate these 5 sentences from English into {local_language}.
+   IMPORTANT: Return ONLY the romanized/transliterated version (no native script).
+   For example, if translating to Arabic, return "Marhaba" (NOT "مرحبا").
+   For Nepali, return "Namaste" (NOT "नमस्ते").
+   For Russian, return "Zdravstvuyte" (NOT "Здравствуйте").
+   For all languages, provide only the Latin/romanized version.
+
+- "Hello!"
+- "How are you?"
+- "Thank you!"
+- "My name is ..."
+- "I am a poor student, how much does this cost?"
+
+2) Create 3 short, practical travel tips tailored to this traveler and country.
+Each tip must be one bullet-sized sentence, under 30 words.
+
+Return ONLY this JSON structure with no markdown formatting:
+{{
+  "translations": {{
+    "Hello!": "romanized version only",
+    "How are you?": "romanized version only",
+    "Thank you!": "romanized version only",
+    "My name is ...": "romanized version only",
+    "I am a poor student, how much does this cost?": "romanized version only"
+  }},
+  "extra_tips": [
+    "tip 1",
+    "tip 2",
+    "tip 3"
+  ]
+}}"""
+        
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=600,
+        )
+        
+        import json
+        content = resp.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if content.startswith("```"):
+            lines = content.split('\n')
+            lines = lines[1:]  # Remove first line (```json or ```)
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]  # Remove last line (```)
+            content = '\n'.join(lines)
+        
+        data = json.loads(content)
+        translations = data.get("translations", {})
+        extra_tips = data.get("extra_tips", [])
+        
+        return translations, extra_tips
+        
+    except Exception as e:
+        print(f"Translation API error: {e}")
+        st.warning(f"⚠️ AI translations unavailable. Using English in PDF.")
+        return {}, []
 
 
 def generate_country_pdf(country, data_manager):
-    """Generate PDF summary of country"""
+    """Generate PDF summary of country with extra AI-style content"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
     story = []
+
     styles = getSampleStyleSheet()
-    
+
     # Custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -528,49 +753,69 @@ def generate_country_pdf(country, data_manager):
         textColor=colors.HexColor('#1a237e'),
         spaceAfter=20,
     )
-    
+
     subtitle_style = ParagraphStyle(
         'Subtitle',
         parent=styles['Normal'],
         fontSize=12,
         textColor=colors.HexColor('#666666'),
-        spaceAfter=30,
+        spaceAfter=20,
     )
-    
-    # Title
+
+    section_header = ParagraphStyle(
+        'SectionHeader',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceBefore=6,
+        spaceAfter=6,
+        textColor=colors.HexColor('#1a237e'),
+    )
+
+    bullet_style = ParagraphStyle(
+        'Bullet',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+    )
+
+    # ------------------------------------------------------------------
+    # Title & meta
+    # ------------------------------------------------------------------
     story.append(Paragraph(f"{country['country_name']}", title_style))
-    
-    # Metadata
+
     persona = st.session_state.get('selected_persona', 'Traveler')
     score = country.get('final_score', 0) * 100
     start_date = st.session_state.get('start_date', datetime.date.today())
     end_date = st.session_state.get('end_date', start_date + datetime.timedelta(days=7))
-    
-    story.append(Paragraph(
-        f"Personalized Guide for {persona} • Match Score: {score:.0f}%<br/>"
-        f"Travel Dates: {start_date} to {end_date}",
-        subtitle_style
-    ))
-    
-    # Quick Facts Table
-    story.append(Paragraph("<b>Quick Facts</b>", styles['Heading2']))
-    story.append(Spacer(1, 0.1*inch))
-    
-    advisory = str(country.get('tugo_advisory_state', 'N/A')) if pd.notna(country.get('tugo_advisory_state')) else 'N/A'
-    
-    # ✅ FIXED: Better handling for all fields
+
+    story.append(
+        Paragraph(
+            f"Personalized Guide for {persona} • Match Score: {score:.0f}% "
+            f"• Travel Dates: {start_date} to {end_date}",
+            subtitle_style,
+        )
+    )
+
+    # ------------------------------------------------------------------
+    # Quick Facts Table (existing)
+    # ------------------------------------------------------------------
+    story.append(Paragraph("Quick Facts", styles['Heading2']))
+    story.append(Spacer(1, 0.1 * inch))
+
+    advisory_raw = country.get('tugo_advisory_state')
+    advisory = str(advisory_raw) if advisory_raw is not None and pd.notna(advisory_raw) else 'N/A'
+
     temp_val = country.get('climate_avg_temp_c', 'N/A')
-    if pd.notna(temp_val):
-        climate_str = f"{float(temp_val):.0f}°C"
+    if temp_val is not None and not (isinstance(temp_val, float) and pd.isna(temp_val)):
+        try:
+            climate_str = f"{float(temp_val):.0f}°C"
+        except Exception:
+            climate_str = 'N/A'
     else:
         climate_str = 'N/A'
-    
-    # ✅ CRITICAL FIX: Try all possible healthcare index field names
+
     healthcare_val = safe_format_number(country.get('numbeo_healthcare_index'))
-    
-    # If that didn't work, debug and try alternatives
     if healthcare_val == 'N/A':
-        # Print all fields containing 'health' or 'healthcare' for debugging
         for key in country.keys():
             if 'health' in key.lower():
                 val = country.get(key)
@@ -579,36 +824,188 @@ def generate_country_pdf(country, data_manager):
                     if formatted != 'N/A':
                         healthcare_val = formatted
                         break
-    
+
     facts_data = [
-        ['Safety Advisory', advisory[:50]],
+        ['Safety Advisory', advisory[:80]],
         ['Climate', climate_str],
         ['UNESCO Sites', str(int(country.get('unesco_count', 0)))],
-        ['Cost of Living', safe_format_number(country.get('numbeo_cost_of_living_index'))],
+        ['Cost of Living (Index)', safe_format_number(country.get('numbeo_cost_of_living_index'))],
         ['Healthcare Index', healthcare_val],
     ]
-    
-    table = Table(facts_data, colWidths=[2.5*inch, 4*inch])
-    table.setStyle([
-        ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f5f7fa')),
-        ('TEXTCOLOR', (0,0), (-1,-1), colors.black),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 10),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
-        ('TOPPADDING', (0,0), (-1,-1), 12),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey)
-    ])
+
+    table = Table(facts_data, colWidths=[2.7 * inch, 3.8 * inch])
+    table.setStyle(
+        TableStyle(
+            [
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f5f7fa')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ]
+        )
+    )
+
     story.append(table)
-    story.append(Spacer(1, 0.3*inch))
+    story.append(Spacer(1, 0.25 * inch))
+
+    # ------------------------------------------------------------------
+    # Essential Phrases
+    # ------------------------------------------------------------------
+    story.append(Paragraph("Essential Phrases", section_header))
+
+    translations, _ = get_pdf_ai_content(country)
+    base_phrases = [
+        "Hello!",
+        "How are you?",
+        "Thank you!",
+        "My name is ...",
+        "I am a poor student, how much does this cost?",
+    ]
+
+    # Display only romanized versions
+    if translations:
+        for eng in base_phrases:
+            loc = translations.get(eng, eng)
+            story.append(Paragraph(f"• {eng} – {loc}", bullet_style))
+    else:
+        # Fallback if no translations available
+        story.append(Paragraph("• Consult a local phrasebook for essential phrases.", bullet_style))
+
+    story.append(Spacer(1, 0.2 * inch))
+
+
+
+    # ------------------------------------------------------------------
+    # NEW SECTION 2: Tarot sentence (if available)
+    # ------------------------------------------------------------------
+    tarot_card = st.session_state.get('tarot_card', {})
+    tarot_name = tarot_card.get('name')
+    tarot_meaning = tarot_card.get('travel_meaning', '') or tarot_card.get('meaning', '')
+    is_reversed = tarot_card.get('is_reversed', False)
+
+    if tarot_name:
+        orientation = "reversed" if is_reversed else "upright"
+        story.append(Paragraph("Tarot Guidance", section_header))
+        tarot_text = (
+            f"Your trip is influenced by the card <b>{tarot_name}</b> ({orientation}). "
+            f"In a travel context, this suggests: {tarot_meaning}"
+        )
+        story.append(Paragraph(tarot_text, bullet_style))
+        story.append(Spacer(1, 0.2 * inch))
+
+    # ------------------------------------------------------------------
+    # NEW SECTION 3: Personalized quick tips based on preferences
+    # ------------------------------------------------------------------
+    story.append(Paragraph("Personalized Travel Tips", section_header))
+
+    prefs = st.session_state.get('prefs', {})
+    weights = st.session_state.get('weights', {})
+
+    target_temp = prefs.get('target_temp')
+    food_style = prefs.get('foodstyle')
+    night_style = prefs.get('nightstyle')
+    move_style = prefs.get('movestyle')
+
+    top_priorities = sorted(
+        [(k, v) for k, v in weights.items() if v > 0.10],
+        key=lambda x: x[1],
+        reverse=True,
+    )[:3]
+    priority_labels = [k.replace('_', ' ').title() for k, _ in top_priorities]
+
+    tips = []
+
+    # Budget / cost focused
+    if 'Cost' in " ".join(priority_labels) or 'Budget' in persona:
+        tips.append(
+            "Focus on affordable neighborhoods, street food, and free cultural sites. "
+            "Use local public transport instead of taxis where it feels safe."
+        )
+
+    # Culture / UNESCO
+    if any('Culture' in p or 'Unesco' in p for p in priority_labels):
+        tips.append(
+            "Plan at least one day around major museums or UNESCO sites. "
+            "Book tickets in advance to avoid queues and peak-hour crowds."
+        )
+
+    # Air quality / calm
+    if any('Clean Air' in p or 'Calm' in p for p in priority_labels):
+        tips.append(
+            "Look for parks, coastal areas, or hill regions to balance busy city days with quiet nature time."
+        )
+
+    # Food style
+    if food_style == 'eatout':
+        tips.append(
+            "Since you enjoy eating out, mark a few highly rated local restaurants and one special place "
+            "for a 'treat yourself' dinner."
+        )
+    elif food_style == 'cook':
+        tips.append(
+            "You prefer cooking, so search for accommodation near supermarkets or markets and check if the "
+            "kitchen is well equipped."
+        )
+
+    # Night style
+    if night_style == 'party':
+        tips.append(
+            "Check local nightlife districts and always plan a safe way back to your accommodation before you go out."
+        )
+    elif night_style == 'chill':
+        tips.append(
+            "Choose areas with cafés, promenades or quiet bars where you can relax in the evening without heavy crowds."
+        )
+
+    # Movement style
+    if move_style == 'walk':
+        tips.append(
+            "Pick compact neighborhoods and pack comfortable shoes, as you will likely explore a lot on foot."
+        )
+
+    # Climate preference
+    if isinstance(target_temp, (int, float)):
+        if target_temp < 20:
+            tips.append(
+                "Pack layers and a light jacket, especially for evenings or higher-altitude excursions."
+            )
+        elif target_temp > 26:
+            tips.append(
+                "Bring light, breathable clothing, sunscreen, and a refillable water bottle to handle the warmth."
+            )
+
+    # Fallback if nothing detected
+    if not tips:
+        tips.append(
+            "Balance your itinerary between must-see highlights and slower days so you return energized instead of exhausted."
+        )
     
+     # Add extra AI-generated tips (if any)
+    _, extra_tips = get_pdf_ai_content(country)
+    for t in extra_tips:
+        if isinstance(t, str) and t.strip():
+            tips.append(t.strip())
+
+    # Single bullet per item – ListFlowable provides the bullet
+    tip_paragraphs = [Paragraph(t, bullet_style) for t in tips]
+    story.append(ListFlowable(tip_paragraphs, bulletType='bullet', leftIndent=12))
+    story.append(Spacer(1, 0.3 * inch))
+
+    # ------------------------------------------------------------------
     # Footer
-    story.append(Spacer(1, 0.5*inch))
-    story.append(Paragraph(
-        f"Generated by Your Next Adventure • {datetime.date.today()}",
-        subtitle_style
-    ))
-    
+    # ------------------------------------------------------------------
+    story.append(Spacer(1, 0.2 * inch))
+    story.append(
+        Paragraph(
+            f"Generated by Your Next Adventure • {datetime.date.today()}",
+            subtitle_style,
+        )
+    )
+
     # Build PDF
     doc.build(story)
     buffer.seek(0)

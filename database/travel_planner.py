@@ -174,7 +174,7 @@ st.markdown(
 REGION_TO_ISO3 = {
     "Europe": [
         "ALB", "AND", "AUT", "BLR", "BEL", "BIH", "BGR", "HRV", "CYP", "CZE",
-        "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN", "ISL", "IRL", "ITA",
+        "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "GIB", "HUN", "ISL", "IRL", "ITA",
         "XKX", "LVA", "LIE", "LTU", "LUX", "MLT", "MDA", "MCO", "MNE", "NLD",
         "MKD", "NOR", "POL", "PRT", "ROU", "RUS", "SMR", "SRB", "SVK", "SVN",
         "ESP", "SWE", "CHE", "UKR", "GBR", "VAT"
@@ -901,7 +901,7 @@ def show_basic_info_step(data_manager):
     col_content, col_flag_empty = st.columns([0.88, 0.12], vertical_alignment="top")
     
     with col_content:
-        st.markdown("### Step 1: Where are you starting from?")
+        st.markdown("### Where are you starting from?")
         origin_options = {"Germany": "FRA", "United States": "ATL"}
         selected_origin = st.radio(
             "Select origin",
@@ -930,7 +930,7 @@ def show_basic_info_step(data_manager):
     st.markdown("---")
     
     # Vacation dates
-    st.markdown("### Step 2: When is your vacation?")
+    st.markdown("### When is your vacation?")
     today = datetime.date.today()
     vacation_dates = st.date_input(
         "Select your travel window",
@@ -963,7 +963,7 @@ def show_basic_info_step(data_manager):
 def show_persona_step(data_manager):
     """Step 2: Choose traveler profile/persona"""
     
-    st.markdown("### Step 3: Choose Your Traveller Profile")
+    st.markdown("### Choose Your Traveller Profile")
     st.write("Pick a profile. Advanced Customization shows weights (0-100 points) that always sum to 100.")
     
     # Define personas
@@ -1115,7 +1115,7 @@ def _choose_swipe_cards(mode: str):
 
 def show_swiping_step():
     if not st.session_state.get("swipe_mode_chosen", False):
-        st.markdown("### Step 4: 🃏 Choose your swipe experience")
+        st.markdown("### 🃏 Choose your swipe experience")
         st.caption("Do you want the full questionnaire, or a randomized 5-card mini-run?")
 
         c1, c2 = st.columns(2, gap="large")
@@ -1142,7 +1142,7 @@ def show_swiping_step():
         return
 
     idx = st.session_state.card_index
-    st.markdown(f"### Step 5: Swipe to Refine Your Choices ({idx + 1}/{len(cards)})")
+    st.markdown(f"### Swipe to Refine Your Choices ({idx + 1}/{len(cards)})")
     st.progress(min((idx + 1) / len(cards), 1.0))
 
     card = cards[idx]
@@ -1416,7 +1416,7 @@ def show_astro_step(data_manager):
 
 
 def show_ban_choices_step(datamanager):
-    st.markdown("### Step 6: 🚫 Ban List (Optional)")
+    st.markdown("### 🚫 Ban List (Optional)")
     st.caption("Do you want to exclude specific regions from your recommendations?")
 
     c1, c2 = st.columns(2)
@@ -1433,7 +1433,7 @@ def show_ban_choices_step(datamanager):
 
 
 def show_ban_list_step(data_manager):
-    st.markdown("### Step 6: 🚫 Ban List (Optional)")
+    st.markdown("### 🚫 Ban List (Optional)")
     st.caption(
         "Quickly exclude whole regions from your recommendations. "
         "Leave everything unselected to keep the whole world in play."
@@ -1442,109 +1442,97 @@ def show_ban_list_step(data_manager):
     # Use hardcoded region mapping
     region_to_iso3 = REGION_TO_ISO3.copy()
 
+    # Get current banned regions from session state
+    bannedregions = set(st.session_state.get("bannedregions", set()))
+    
     # Nice ordering of regions for display
-    nice_order = [
-        "Europe",
-        "Asia",
-        "North America",
-        "South America",
-        "Africa",
-        "Oceania",
-    ]
-
-    regions = [r for r in nice_order if r in region_to_iso3] + [
-        r for r in region_to_iso3.keys() if r not in nice_order
-    ]
-
-    st.markdown("#### Pick regions you want to **exclude**")
-    st.caption(
-        "Tap one or more regions below. We will hide all countries from those areas in your results."
-    )
-
-    # Current selections from session
-    banned_regions = set(st.session_state.get("banned_regions", set()))
-    cols = st.columns(3)
+    nice_order = ["Europe", "Asia", "North America", "South America", "Africa", "Oceania"]
+    regions = [r for r in nice_order if r in region_to_iso3] + [r for r in region_to_iso3.keys() if r not in nice_order]
+    
+    st.markdown("#### Pick regions you want to exclude")
+    st.caption("Tap one or more regions below. We will hide all countries from those areas in your results.")
 
     # Render pill-style toggle buttons for each region
+    cols = st.columns(3)
     for idx, region in enumerate(regions):
         col = cols[idx % 3]
-        is_banned = region in banned_regions
+        is_banned = region in bannedregions
         label = f"❌ {region}" if is_banned else region
         button_key = f"ban_region_{region}"
-
+        
         with col:
             clicked = st.button(
                 label,
                 use_container_width=True,
                 key=button_key,
-                type="primary" if is_banned else "secondary",
+                type="primary" if is_banned else "secondary"
             )
-
-        if clicked:
-            if is_banned:
-                banned_regions.discard(region)
-            else:
-                banned_regions.add(region)
-            # Update session state immediately
-            st.session_state["banned_regions"] = banned_regions
-            # Force rerun to show the change immediately
-            st.rerun()
-
-    # Persist region selection
-    st.session_state["banned_regions"] = banned_regions
+            if clicked:
+                if is_banned:
+                    bannedregions.discard(region)
+                else:
+                    bannedregions.add(region)
+                # CRITICAL: Save to session state immediately after change
+                st.session_state["bannedregions"] = bannedregions
+                st.rerun()
 
     # Derive banned ISO3 codes from selected regions
-    banned_iso3 = set()
-    for region in banned_regions:
-        banned_iso3.update(region_to_iso3.get(region, []))
+    bannediso3 = set()
+    for region in bannedregions:
+        bannediso3.update(region_to_iso3.get(region, []))
+    
+    st.session_state["bannediso3"] = sorted(bannediso3)
 
-    st.session_state["bannediso3"] = sorted(banned_iso3)
-
-    # Small summary line
-    if banned_regions:
-        st.markdown(
-            "You are currently excluding: "
-            + ", ".join(f"`{r}`" for r in sorted(banned_regions))
-        )
+    # Show summary
+    if bannedregions:
+        st.markdown(f"**You are currently excluding:** {', '.join(f'🚫 {r}' for r in sorted(bannedregions))}")
     else:
-        st.caption("No regions excluded. Your matches can come from anywhere 🌍")
-
+        st.caption("No regions excluded. Your matches can come from anywhere! 🌍")
+    
     st.markdown("---")
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button(
-            "Calculate My Matches! 🚀",
-            use_container_width=True,
-            key="ban_regions_calc",
-        ):
+        if st.button("Calculate My Matches! 🎯", use_container_width=True, key="ban_regions_calc"):
             st.session_state.step = 6
             st.rerun()
 
 
 def show_results_step(data_manager):
-    st.markdown("### Step 7: 🎉 Your Top Destinations!")
+    st.markdown("### 🎉 Your Top Destinations!")
     st.caption("Based on your preferences and filters, here are your personalized matches.")
     
     with st.spinner("Analyzing the globe to find your perfect spot..."):
-        dfbase = data_manager.load_base_data(st.session_state.get("originiata", "FRA"))
+        dfbase = data_manager.load_base_data(st.session_state.get("origin_iata", "FRA"))
         if dfbase.empty:
             st.error("No base data loaded. Check DB query.")
             return
 
-        if st.session_state.get("lgbtqfilteractive", False):
+        if st.session_state.get("lgbtq_filter_active", False):
             if "equality_index_score" in dfbase.columns:
                 dfbase = dfbase[dfbase["equality_index_score"] >= 60].reset_index(drop=True)
-                st.info("✅ Filtered to LGBTQ+ friendly destinations")
+                st.info("🏳️‍🌈 Filtered to LGBTQ+ friendly destinations")
             else:
                 st.warning("Equality Index data not available in database")
 
-        banned_iso3 = set(st.session_state.get("bannediso3", []))
-        if banned_iso3 and "iso3" in dfbase.columns:
-            before_count = len(dfbase)
-            dfbase = dfbase[~dfbase["iso3"].isin(banned_iso3)].reset_index(drop=True)
-            after_count = len(dfbase)
-            if before_count - after_count > 0:
-                st.info(f"🚫 Filtered out {before_count - after_count} destinations from banned regions.")
+        bannediso3 = set(st.session_state.get("bannediso3", []))
+        
+        # Check if all 6 continents are banned (easter egg)
+        all_continents = {"Europe", "Asia", "Africa", "North America", "South America", "Oceania"}
+        banned_regions = st.session_state.get("bannedregions", set())
+        all_continents_banned = len(banned_regions) == 6 and banned_regions == all_continents
+        
+        if bannediso3 and "iso3" in dfbase.columns:
+            beforecount = len(dfbase)
+            dfbase = dfbase[~dfbase["iso3"].isin(bannediso3)].reset_index(drop=True)
+            aftercount = len(dfbase)
+            if beforecount - aftercount > 0:
+                st.info(f"🚫 Filtered out {beforecount - aftercount} destinations from banned regions.")
+        
+        # Easter egg: Show AFTER the filter info
+        if all_continents_banned:
+            st.info("🏝️ We do not have any travel destinations outside of this earth, but maybe one of the following islands would suit your travel preferences.")
+
+
 
         dfbase = dedupe_one_row_per_country(dfbase)
         matcher = TravelMatcher(dfbase)
@@ -1554,6 +1542,7 @@ def show_results_step(data_manager):
         if df.empty:
             st.warning("No destinations found after filters.")
             return
+
 
         # Display results
         top3 = df.head(3)
@@ -1631,21 +1620,18 @@ def show_dashboard_step(data_manager):
             st.rerun()
         return
     
-    # Top navigation
-    topl, topm, topr = st.columns([2, 1, 1])
-    with topl:
-        st.markdown(f"### 🌍 {country['country_name']}")
-    with topm:
+    col1, col2 = st.columns([1, 1])
+    with col1:
         if st.button("← Back to Results", use_container_width=True):
             st.session_state.step = 6
             st.rerun()
-    with topr:
+    with col2:
         if st.button("🔄 Start Over", use_container_width=True):
             st.session_state.clear()
             st.rerun()
     
     st.markdown("---")
-    
+
     # Render the new overview module
     render_country_overview(
         country=country,
