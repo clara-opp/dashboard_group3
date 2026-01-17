@@ -1,12 +1,13 @@
 # ============================================================
-# pathfind_design.py - UNIFIED DARK DESIGN v8
-# COMPLETE DESIGN SYSTEM + HEADER
+# pathfind_design.py - UNIFIED DARK DESIGN v9
+# WORKS IDENTICALLY ON LOCAL + STREAMLIT CLOUD
 # ============================================================
 
 import streamlit as st
 import base64
 import os
 from pathlib import Path
+
 
 def get_img_as_base64(file_path):
     """Convert image file to base64."""
@@ -16,6 +17,7 @@ def get_img_as_base64(file_path):
         return base64.b64encode(data).decode()
     except Exception:
         return ""
+
 
 def find_background_image(img_file="background.jpg"):
     """Find background image in multiple possible directories."""
@@ -40,17 +42,16 @@ def find_background_image(img_file="background.jpg"):
     return ""
 
 
-
 def setup_complete_design():
     """
-    ULTIMATE DARK DESIGN v8 - UNIFIED & MOBILE OPTIMIZED:
+    ULTIMATE DARK DESIGN v9 - UNIFIED FOR LOCAL + CLOUD:
     - FORCE DARK MODE überall
     - Dunkel Hintergrund (konsistent)
     - HELLER TEXT überall (Kontrast-optimiert)
-    - DUNKEL BUTTONS - AGGRESSIVE SELECTORS (alle großen Buttons)
-    - PERFECT CONTRAST für Lesbarkeit
-    - Konsistent auf ALLEN Seiten + Übersichtsseiten
-    - MOBILE RESPONSIVE (480px, 768px breakpoints)
+    - DUNKEL BUTTONS - AGGRESSIVE SELECTORS
+    - BLUR direkt auf MAIN background (nicht ::before)
+    - WORKS IDENTICALLY EVERYWHERE
+    - MOBILE RESPONSIVE
     """
     
     st.markdown("""
@@ -67,7 +68,66 @@ def setup_complete_design():
     bin_str = find_background_image("background.jpg")
 
     if not bin_str:
-        st.warning("⚠️ Background-Picture not found")
+        st.warning("⚠️ Background-Picture not found - using gradient")
+    
+    # CONDITIONAL BG - WITH IMAGE OR GRADIENT
+    if bin_str:
+        bg_section = f"""
+    /* ========================================
+       BACKGROUND WITH IMAGE - BLURRED
+       ======================================== */
+    html, body, [data-testid="stAppViewContainer"], .stApp {{
+        background-image: url("data:image/jpeg;base64,{bin_str}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        filter: blur(15px) brightness(0.65) contrast(1.1);
+        margin: 0;
+        padding: 0;
+    }}
+    
+    [data-testid="stAppViewContainer"] {{
+        position: relative;
+        z-index: 1;
+    }}
+    
+    [data-testid="stAppViewContainer"]::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(10, 15, 30, 0.55);
+        z-index: 0;
+        pointer-events: none;
+    }}
+        """
+    else:
+        bg_section = """
+    /* ========================================
+       BACKGROUND GRADIENT FALLBACK
+       ======================================== */
+    html, body, [data-testid="stAppViewContainer"], .stApp {{
+        background: linear-gradient(135deg, #0a0f1e 0%, #1a2a3a 50%, #0f1520 100%) !important;
+        background-attachment: fixed;
+        margin: 0;
+        padding: 0;
+    }}
+    
+    [data-testid="stAppViewContainer"]::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(10, 15, 30, 0.4);
+        z-index: 0;
+        pointer-events: none;
+    }}
+        """
     
     complete_css = f"""
     <style>
@@ -84,42 +144,7 @@ def setup_complete_design():
         color-scheme: dark !important;
     }}
     
-    /* ========================================
-       FULL-SCREEN BACKGROUND - DARK
-       ======================================== */
-    html, body, [data-testid="stAppViewContainer"], .stApp {{
-        background-image: url("data:image/jpeg;base64,{bin_str}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        margin: 0;
-        padding: 0;
-        background-color: #0a0f1e !important;
-    }}
-    
-    [data-testid="stAppViewContainer"]::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: url("data:image/jpeg;base64,{bin_str}");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        filter: blur(8px);
-        opacity: 0.97;
-        z-index: -2;
-        animation: drift-bg 30s ease-in-out infinite;
-    }}
-    
-    @keyframes drift-bg {{
-        0% {{ filter: blur(8px) brightness(0.98); }}
-        50% {{ filter: blur(8px) brightness(1.02); }}
-        100% {{ filter: blur(8px) brightness(0.98); }}
-    }}
+    {bg_section}
     
     /* ========================================
        UNIVERSAL TEXT - MAXIMUM CONTRAST
@@ -189,6 +214,8 @@ def setup_complete_design():
         text-align: center;
         margin: 1.5rem 0 2rem 0;
         animation: slide-down 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        position: relative;
+        z-index: 10;
     }}
     
     .pathfind-logo {{
@@ -304,6 +331,8 @@ def setup_complete_design():
             inset 0 0 25px rgba(255, 255, 255, 0.08) !important;
         color: rgba(255, 255, 255, 1);
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        z-index: 5;
     }}
     
     [data-testid="stVerticalBlockBorderWrapper"]:hover {{
@@ -330,7 +359,8 @@ def setup_complete_design():
     [data-testid="stColumn"] > div button,
     [data-testid="stColumn"] button,
     [data-testid="stHorizontalBlock"] button,
-    [data-testid="stExpanderContainer"] button {{
+    [data-testid="stExpanderContainer"] button,
+    [data-testid="stExpander"] button {{
         background: rgba(25, 35, 55, 0.95) !important;
         backdrop-filter: blur(10px) !important;
         border: 1.5px solid rgba(80, 120, 180, 0.7) !important;
@@ -360,7 +390,8 @@ def setup_complete_design():
     [data-testid="stColumn"] > div button:hover,
     [data-testid="stColumn"] button:hover,
     [data-testid="stHorizontalBlock"] button:hover,
-    [data-testid="stExpanderContainer"] button:hover {{
+    [data-testid="stExpanderContainer"] button:hover,
+    [data-testid="stExpander"] button:hover {{
         background: rgba(50, 70, 100, 0.98) !important;
         border: 1.5px solid rgba(100, 150, 220, 0.9) !important;
         box-shadow: 
@@ -382,7 +413,8 @@ def setup_complete_design():
     [data-testid="stColumn"] > div button:active,
     [data-testid="stColumn"] button:active,
     [data-testid="stHorizontalBlock"] button:active,
-    [data-testid="stExpanderContainer"] button:active {{
+    [data-testid="stExpanderContainer"] button:active,
+    [data-testid="stExpander"] button:active {{
         transform: translateY(0px) !important;
         box-shadow: 
             0 4px 12px rgba(0, 0, 0, 0.3),
