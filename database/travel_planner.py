@@ -17,6 +17,7 @@ from modules.flight_search import (
 from modules.country_overview import render_country_overview
 from modules.persona_selector import render_persona_step
 from modules.trip_planner import show_trip_planner
+from modules.pathfind_design import setup_complete_design, render_pathfind_header
 
 
 # ============================================================
@@ -35,104 +36,213 @@ REDIRECT_URI = "http://localhost:8501"
 # ============================================================
 # STYLES
 # ============================================================
+
 st.markdown(
     """
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 
-        html, body, .stMarkdown, div[data-testid="stText"], .stButton button {
+        /* ========================================
+           UNIVERSAL FONTS
+           ======================================== */
+        html, body, .stMarkdown, div[data-testid="stText"], 
+        .stButton button, label {
             font-family: 'Poppins', sans-serif !important;
-            color: var(--text-color);
+            color: rgba(255, 255, 255, 1) !important;
         }
 
+        /* ========================================
+           HEADERS - DARK MODE
+           ======================================== */
         .main-header {
             font-size: 3rem;
-            color: #1a237e;
+            color: rgba(255, 255, 255, 1);
             font-weight: 700;
             text-align: center;
             margin-top: 1rem;
             margin-bottom: 0.5rem;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8) !important;
         }
+        
         .sub-header {
             text-align: center;
-            color: #666;
+            color: rgba(255, 255, 255, 0.9);
             font-size: 1.2rem;
             margin-bottom: 3rem;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6) !important;
         }
 
-        @media (prefers-color-scheme: dark) {
-            .main-header { color: #2949FF; }
-            .sub-header { color: #A1A1A1; }
-        }
-
+        /* ========================================
+           CONTENT STYLING
+           ======================================== */
         [data-testid="stVerticalBlockBorderWrapper"] {
             border-radius: 12px !important;
+            background: rgba(15, 20, 40, 0.35) !important;
+            backdrop-filter: blur(32px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
         }
 
-        .price-text { color: var(--primary-color); font-size: 1.4rem; font-weight: 700; }
-        .carrier-text { font-size: 1.1rem; font-weight: 600; color: var(--text-color); }
-        .route-text { color: var(--text-color); opacity: 0.7; font-size: 0.9rem; }
+        /* ========================================
+           TEXT COLORS - UNIFIED DARK
+           ======================================== */
+        .price-text { 
+            color: rgba(100, 200, 255, 1) !important; 
+            font-size: 1.4rem; 
+            font-weight: 700; 
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+        }
+        
+        .carrier-text { 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            color: rgba(255, 255, 255, 1) !important;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+        }
+        
+        .route-text { 
+            color: rgba(255, 255, 255, 0.7) !important; 
+            font-size: 0.9rem;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+        }
 
-        .time-badge { background-color: #1e1e1e; color: #4caf50; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-weight: 700; margin-right: 10px; border: 1px solid #4caf50; }
-        .timeline-row { margin: 2px 0; display: flex; align-items: center; font-size: 0.9rem; }
-        .duration-info { margin-left: 35px; color: var(--text-color); opacity: 0.6; font-style: italic; font-size: 0.8rem; }
-        .layover-info { margin: 5px 0; text-align: left; padding-left: 50px; color: var(--text-color); opacity: 0.8; font-style: italic; font-size: 0.85rem; border-top: 1px dashed var(--text-color); border-bottom: 1px dashed var(--text-color); padding: 2px 0 2px 50px; }
-        .city-name { font-weight: 700; color: var(--text-color); }
-        .iata-code { color: var(--text-color); opacity: 0.6; }
+        /* ========================================
+           BADGES & TIMELINE
+           ======================================== */
+        .time-badge { 
+            background-color: rgba(20, 25, 40, 0.9) !important; 
+            color: #4caf50; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            font-family: monospace; 
+            font-weight: 700; 
+            margin-right: 10px; 
+            border: 1px solid #4caf50; 
+        }
+        
+        .timeline-row { 
+            margin: 2px 0; 
+            display: flex; 
+            align-items: center; 
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 1) !important;
+        }
+        
+        .duration-info { 
+            margin-left: 35px; 
+            color: rgba(255, 255, 255, 0.6) !important; 
+            font-style: italic; 
+            font-size: 0.8rem;
+        }
+        
+        .layover-info { 
+            margin: 5px 0; 
+            text-align: left; 
+            padding-left: 50px; 
+            color: rgba(255, 255, 255, 0.8) !important; 
+            font-style: italic; 
+            font-size: 0.85rem; 
+            border-top: 1px dashed rgba(255, 255, 255, 0.3); 
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.3); 
+            padding: 2px 0 2px 50px; 
+        }
+        
+        .city-name { 
+            font-weight: 700; 
+            color: rgba(255, 255, 255, 1) !important;
+        }
+        
+        .iata-code { 
+            color: rgba(255, 255, 255, 0.6) !important; 
+        }
 
+        /* ========================================
+           SWIPE QUESTION - DARK STYLE
+           ======================================== */
         .swipe-question {
             text-align: center;
             font-size: 1.2rem;
             font-weight: 600;
-            color: #1a237e;
+            color: rgba(255, 255, 255, 1) !important;
             margin-bottom: 2rem;
             padding: 0 !important;
             background: none !important;
             border: none !important;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6) !important;
         }
 
+        /* ========================================
+           HOMEPAGE BUTTONS - DARK DESIGN v8 (UNIFIED)
+           ======================================== */
         .stButton > button {
             width: 100%;
             border-radius: 14px;
             height: 220px !important;
             font-size: 3rem !important;
             font-weight: 600;
-            border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             white-space: pre-line !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
             gap: 20px !important;
-            background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%) !important;
-            border: 2px solid #e0e5ed !important;
+            
+            /* Design v8 Dark Colors */
+            background: rgba(25, 35, 55, 0.95) !important;
+            color: rgba(255, 255, 255, 0.99) !important;
+            border: 1.5px solid rgba(80, 120, 180, 0.7) !important;
+            box-shadow: 
+                0 6px 20px rgba(0, 0, 0, 0.4),
+                inset 0 0 12px rgba(255, 255, 255, 0.04) !important;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        .stButton > button:hover {
+            background: rgba(50, 70, 100, 0.98) !important;
+            border: 1.5px solid rgba(100, 150, 220, 0.9) !important;
+            box-shadow: 
+                0 10px 30px rgba(0, 0, 0, 0.5),
+                inset 0 0 15px rgba(255, 255, 255, 0.06) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        .stButton > button:active {
+            transform: translateY(0px) !important;
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.3),
+                inset 0 0 8px rgba(255, 255, 255, 0.03) !important;
         }
 
         div[data-testid="stButton"] > button {
-            background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%) !important;
-            color: #333;
+            background: rgba(25, 35, 55, 0.95) !important;
+            color: rgba(255, 255, 255, 0.99) !important;
+            border: 1.5px solid rgba(80, 120, 180, 0.7) !important;
+            box-shadow: 
+                0 6px 20px rgba(0, 0, 0, 0.4),
+                inset 0 0 12px rgba(255, 255, 255, 0.04) !important;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
         }
 
         div[data-testid="stButton"] > button:hover {
-            background: linear-gradient(135deg, #1a237e 0%, #283593 100%) !important;
-            color: white !important;
-            border-color: #1a237e !important;
-            box-shadow: 0 8px 24px rgba(26, 35, 126, 0.25) !important;
-            transform: translateY(-4px) !important;
+            background: rgba(50, 70, 100, 0.98) !important;
+            border: 1.5px solid rgba(100, 150, 220, 0.9) !important;
+            box-shadow: 
+                0 10px 30px rgba(0, 0, 0, 0.5),
+                inset 0 0 15px rgba(255, 255, 255, 0.06) !important;
+            transform: translateY(-2px) !important;
         }
 
-        @media (max-width: 768px) {
-            .stButton > button {
-                height: 180px !important;
-                font-size: 2.5rem !important;
-            }
-            .swipe-question {
-                font-size: 1rem;
-            }
+        div[data-testid="stButton"] > button:active {
+            transform: translateY(0px) !important;
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.3),
+                inset 0 0 8px rgba(255, 255, 255, 0.03) !important;
         }
 
+        /* ========================================
+           PRIDE BADGE - ENHANCED FEEDBACK
+           ======================================== */
         .pride-badge-top-left {
             display: flex;
             align-items: center;
@@ -143,22 +253,37 @@ st.markdown(
         .pride-flag-icon {
             font-size: 48px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             filter: grayscale(1);
-            padding: 0;
-            border: 2px solid transparent;
-            border-radius: 8px;
+            padding: 8px;
+            border: 3px solid transparent;
+            border-radius: 12px;
             line-height: 1;
+            display: inline-block;
+            background: rgba(255, 255, 255, 0);
         }
 
         .pride-flag-icon:hover {
-            transform: scale(1.1);
+            transform: scale(1.15);
+            background: rgba(255, 20, 147, 0.1);
+            filter: grayscale(0.7);
+            border: 3px solid rgba(255, 20, 147, 0.3);
         }
 
         .pride-flag-icon.active {
             filter: grayscale(0);
-            border: 2px solid #FF1493;
-            box-shadow: 0 0 15px rgba(255, 20, 147, 0.4);
+            border: 3px solid #FF1493;
+            box-shadow: 
+                0 0 25px rgba(255, 20, 147, 0.8),
+                0 0 40px rgba(255, 20, 147, 0.4),
+                inset 0 0 15px rgba(255, 20, 147, 0.2);
+            background: rgba(255, 20, 147, 0.15);
+            transform: scale(1.2);
+        }
+
+        .pride-flag-icon.active:hover {
+            filter: grayscale(0);
+            transform: scale(1.25);
         }
 
         .pride-info-btn {
@@ -166,6 +291,92 @@ st.markdown(
             padding: 0;
             height: auto;
             min-height: auto;
+            background: rgba(25, 35, 55, 0.95) !important;
+            color: rgba(255, 255, 255, 0.99) !important;
+            border: 1.5px solid rgba(80, 120, 180, 0.7) !important;
+            border-radius: 10px !important;
+            box-shadow: 
+                0 6px 20px rgba(0, 0, 0, 0.4),
+                inset 0 0 12px rgba(255, 255, 255, 0.04) !important;
+        }
+
+        .pride-info-btn:hover {
+            background: rgba(50, 70, 100, 0.98) !important;
+            border: 1.5px solid rgba(100, 150, 220, 0.9) !important;
+            box-shadow: 
+                0 10px 30px rgba(0, 0, 0, 0.5),
+                inset 0 0 15px rgba(255, 255, 255, 0.06) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        /* ========================================
+           MOBILE RESPONSIVE
+           ======================================== */
+        @media (max-width: 768px) {
+            .main-header {
+                font-size: 2rem;
+            }
+
+            .sub-header {
+                font-size: 0.95rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .stButton > button {
+                height: 180px !important;
+                font-size: 2.5rem !important;
+                border-radius: 10px;
+            }
+
+            .swipe-question {
+                font-size: 1rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .pride-flag-icon {
+                font-size: 40px;
+                padding: 6px;
+            }
+
+            .pride-flag-icon.active {
+                transform: scale(1.15);
+            }
+
+            .pride-flag-icon.active:hover {
+                transform: scale(1.2);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stButton > button {
+                height: 150px !important;
+                font-size: 2rem !important;
+                gap: 15px !important;
+            }
+
+            .main-header {
+                font-size: 1.5rem;
+            }
+
+            .pride-flag-icon {
+                font-size: 36px;
+                padding: 4px;
+            }
+
+            .swipe-question {
+                font-size: 0.9rem;
+            }
+        }
+
+        /* ========================================
+           DARK MODE MEDIA QUERY OVERRIDE
+           ======================================== */
+        @media (prefers-color-scheme: dark) {
+            .main-header { color: rgba(255, 255, 255, 1) !important; }
+            .sub-header { color: rgba(255, 255, 255, 0.9) !important; }
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                background: rgba(15, 15, 30, 0.35) !important;
+            }
         }
     </style>
     """,
@@ -902,28 +1113,39 @@ def show_basic_info_step(data_manager):
         selected_origin = st.radio(
             "Select origin",
             list(origin_options.keys()),
-            horizontal=True,
             label_visibility="collapsed",
+            horizontal=True
         )
         st.session_state["origin_iata"] = origin_options[selected_origin]
 
     with col_flag_empty:
-        c1, c2 = st.columns([0.5, 0.5])
-        with c1:
-            is_active = st.session_state.get("lgbtq_filter_active", False)
+        c_flag, c_info = st.columns([0.65, 0.35], vertical_alignment="bottom")
+        
+        with c_flag:
+            if "lgbtq_filter_active" not in st.session_state:
+                st.session_state.lgbtq_filter_active = False
+            
+            is_active = st.session_state.lgbtq_filter_active
+            
             if st.button(
-                "🏳️‍🌈",
-                key="pride_toggle",
-                help="LGBTQ+ safe filter",
-                type="primary" if is_active else "secondary",
+                f"{'🏳️‍🌈' if is_active else '🏳️'}",
+                key="lgbtq_toggle",
+                help="Toggle LGBTQ+ Safe Travel Filter",
+                use_container_width=True
             ):
                 st.session_state.lgbtq_filter_active = not st.session_state.lgbtq_filter_active
                 st.rerun()
-        with c2:
-            with st.popover("ℹ️"):
-                st.markdown("Legal rights + Societal acceptance. Index ≥ 60.")
 
-    st.markdown("---")
+        with c_info:
+            with st.popover("ℹ️", use_container_width=True):
+                st.markdown("""
+                **LGBTQ+ Safe Travel**
+                
+                Filters for countries with stronger legal protections and societal acceptance.
+                
+                *Note: Data-based guidance only. Not a guarantee of individual safety.*
+                """)
+
 
     # Vacation dates
     st.markdown("### When is your vacation?")
@@ -966,33 +1188,18 @@ def show_basic_info_step(data_manager):
 
 def _choose_swipe_cards(mode: str):
     all_cards = list(SWIPE_CARDS_ALL)
-    if mode == "all":
-        return all_cards
     seed = int(st.session_state.prefs.get("jitter_seed", random.randint(1, 10_000_000)))
     rnd = random.Random(seed)
-    return rnd.sample(all_cards, k=min(5, len(all_cards)))
+    return rnd.sample(all_cards, k=min(6, len(all_cards)))
 
 
 def show_swiping_step():
     if not st.session_state.get("swipe_mode_chosen", False):
-        st.markdown("### 🃏 Choose your swipe experience")
-        st.caption("Do you want the full questionnaire, or a randomized 5-card mini-run?")
-
-        c1, c2 = st.columns(2, gap="large")
-        with c1:
-            if st.button("🎲 Random 5 (Surprise me)", use_container_width=True, key="mode_random5"):
-                st.session_state.swipe_mode = "random5"
-                st.session_state.active_swipe_cards = _choose_swipe_cards("random5")
-                st.session_state.card_index = 0
-                st.session_state.swipe_mode_chosen = True
-                st.rerun()
-        with c2:
-            if st.button("🧠 Full experience (All swipes)", use_container_width=True, key="mode_all"):
-                st.session_state.swipe_mode = "all"
-                st.session_state.active_swipe_cards = _choose_swipe_cards("all")
-                st.session_state.card_index = 0
-                st.session_state.swipe_mode_chosen = True
-                st.rerun()
+        # Automatisch 6 zufällige Karten laden
+        st.session_state.active_swipe_cards = _choose_swipe_cards("random")
+        st.session_state.card_index = 0
+        st.session_state.swipe_mode_chosen = True
+        st.rerun()
         return
 
     cards = st.session_state.get("active_swipe_cards") or list(SWIPE_CARDS_ALL)
@@ -1529,6 +1736,10 @@ def run_app():
     data_manager = DataManager()
     init_session_state()
 
+    #include corporate design
+    setup_complete_design()
+    render_pathfind_header()
+
     handle_google_oauth_callback(
         data_manager=data_manager,
         calendar_client=calendar_client,
@@ -1537,8 +1748,6 @@ def run_app():
         redirect_uri=REDIRECT_URI,
     )
 
-    st.markdown('<div class="main-header">🌍 Your Next Adventure Awaits</div>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">A personalized travel planner for your individual needs.</p>', unsafe_allow_html=True)
 
     step = st.session_state.step
 
