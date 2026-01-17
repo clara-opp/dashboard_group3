@@ -12,3 +12,4 @@ google-api-python-client>=2.100.0
 reportlab>=4.0.0
 pillow>=10.0.0
 geopy>=2.4.1
+pycountry>=24.6.1
