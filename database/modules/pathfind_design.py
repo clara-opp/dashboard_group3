@@ -23,8 +23,8 @@ def find_background_image(img_file="background.jpg"):
         "personas",
         "./personas",
         os.path.join(os.getcwd(), "personas"),
-        os.path.join(os.path.dirname(__file__), "personas"),
-        str(Path(__file__).parent / "personas"),
+        os.path.join(os.path.dirname(__file__), "..", "personas"), 
+        str(Path(__file__).parent.parent / "personas"), 
     ]
     
     for img_dir in possible_dirs:
