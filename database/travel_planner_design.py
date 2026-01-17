@@ -17,7 +17,7 @@ from modules.flight_search import (
 from modules.country_overview import render_country_overview
 from modules.persona_selector import render_persona_step
 from modules.trip_planner import show_trip_planner
-from modules.pathfind_design import setup_complete_design, render_pathfind_header
+from modules.pathfind_design_light import setup_complete_design, render_pathfind_header
 
 
 # ============================================================
