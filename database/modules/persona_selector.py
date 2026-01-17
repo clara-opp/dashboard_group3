@@ -1,5 +1,5 @@
 # ============================================================================
-# PERSONA SELECTOR MODULE (CAROUSEL + AUTO-REDISTRIBUTE WEIGHTS)
+# PERSONA SELECTOR MODULE (CAROUSEL + AUTO-REDISTRIBUTE WEIGHTS) - CLOUD OPTIMIZED
 # File: modules/persona_selector.py
 # Purpose: Smooth carousel with auto-adjusting weight sliders
 # ============================================================================
@@ -8,6 +8,7 @@ import streamlit as st
 import base64
 import os
 from pathlib import Path
+import copy
 
 
 # ============================================================================
@@ -29,7 +30,6 @@ def find_image_source(img_file, img_url):
     Find image source: try local file first, then fallback to URL.
     Searches multiple possible directories.
     """
-    # Possible directories to search
     possible_dirs = [
         "personas",
         "./personas",
@@ -38,18 +38,16 @@ def find_image_source(img_file, img_url):
         str(Path(__file__).parent.parent / "personas"),
     ]
     
-    # Try each directory
     for img_dir in possible_dirs:
         try:
             img_path = os.path.join(img_dir, img_file)
             if os.path.exists(img_path) and os.path.isfile(img_path):
                 b64_img = get_img_as_base64(img_path)
-                if b64_img:  # Successfully encoded
+                if b64_img:
                     return f"data:image/jpeg;base64,{b64_img}"
         except Exception:
             pass
     
-    # If no local file found, use URL
     return img_url or "https://via.placeholder.com/600x450?text=No+Image"
 
 
@@ -260,22 +258,6 @@ def load_carousel_css():
             transform: scale(0.95) translateY(2px);
             box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
         }
-
-        /* Spacer for button */
-        .button-spacer {
-            margin-top: 50px;
-            margin-bottom: 30px;
-        }
-
-        /* Select Button Animation */
-        [data-testid="stButton"] button {
-            animation: smooth-fade 0.4s ease-out !important;
-        }
-
-        /* Remove loading spinner during transitions */
-        .stSpinner {
-            display: none !important;
-        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -283,11 +265,7 @@ def load_carousel_css():
 def create_card_html(profile_data, is_active=False):
     """Generate HTML for persona card with centered info tooltip."""
     status_class = "active" if is_active else "inactive"
-    
-    # Find image source (local or URL)
     img_src = find_image_source(profile_data["img_file"], profile_data.get("img_url"))
-
-    # Escape quotes in description
     description = profile_data['description'].replace('"', '&quot;').replace("'", "&#39;")
 
     html = f"""
@@ -408,74 +386,54 @@ def get_travel_profiles():
 
 
 # ============================================================================
-# WEIGHT REDISTRIBUTION LOGIC (FIXED)
+# WEIGHT REDISTRIBUTION LOGIC - ROBUST VERSION
 # ============================================================================
 
 def redistribute_weights(weights_dict, changed_key, new_value, weight_keys):
     """
     Auto-redistribute weights to maintain sum of 100.
-    When one weight is changed, proportionally reduce other weights.
-    FIXED: Proper rounding to ensure sum = 100
+    Robust version for Streamlit Cloud.
     """
-    old_value = weights_dict.get(changed_key, 0)
+    w = copy.deepcopy(weights_dict)
+    old_value = w.get(changed_key, 0)
     diff = new_value - old_value
     
-    # Set the new value
-    weights_dict[changed_key] = new_value
+    w[changed_key] = new_value
     
-    # Get all other keys and their current sum
     other_keys = [k for k in weight_keys if k != changed_key]
-    other_sum = sum(weights_dict.get(k, 0) for k in other_keys)
+    other_sum = sum(w.get(k, 0) for k in other_keys)
     
     if other_sum > 0 and diff != 0:
-        # Redistribute the difference proportionally
-        reduction_remainder = 0
-        for idx, other_key in enumerate(other_keys):
-            current_val = weights_dict.get(other_key, 0)
-            if other_sum > 0:
+        for other_key in other_keys:
+            current_val = w.get(other_key, 0)
+            if current_val > 0:
                 proportion = current_val / other_sum
-                reduction = diff * proportion
-                rounded_reduction = int(round(reduction + reduction_remainder))
-                weights_dict[other_key] = max(0, current_val - rounded_reduction)
-                reduction_remainder = reduction + reduction_remainder - rounded_reduction
+                reduction = int(round(diff * proportion))
+                w[other_key] = max(0, current_val - reduction)
     
-    # Final normalization to ensure sum = 100
-    current_sum = sum(weights_dict.values())
+    # Final normalization
+    current_sum = sum(w.values())
     if current_sum != 100 and current_sum > 0:
-        scale_factor = 100 / current_sum
+        scale_factor = 100.0 / current_sum
         for key in weight_keys:
-            weights_dict[key] = int(round(weights_dict[key] * scale_factor))
+            w[key] = int(round(w[key] * scale_factor))
         
-        # Final adjustment for rounding errors
-        final_sum = sum(weights_dict.values())
+        final_sum = sum(w.values())
         if final_sum != 100:
             diff_needed = 100 - final_sum
-            # Find largest value and adjust it
-            max_key = max(weight_keys, key=lambda k: weights_dict.get(k, 0))
-            weights_dict[max_key] += diff_needed
+            max_key = max(weight_keys, key=lambda k: w.get(k, 0))
+            w[max_key] = w.get(max_key, 0) + diff_needed
     
-    return weights_dict
+    return w
 
 
 # ============================================================================
-# MAIN RENDER FUNCTION (FIXED)
+# MAIN RENDER FUNCTION - CLOUD OPTIMIZED
 # ============================================================================
 
 def render_persona_step(datamanager):
-    """
-    Render persona carousel with optional advanced customization.
-    Auto-redistributes weights to maintain 100 point sum.
+    """Render persona carousel with fine-tune customization."""
     
-    Features:
-    - Smooth carousel with 3 persona cards
-    - Quick next button to proceed immediately
-    - Optional fine-tune expander for custom weight adjustments
-    - Auto-redistributing weight sliders (single column)
-    - Weights always sum to 100 (FIXED)
-    - Fallback to Unsplash URLs if local images not found
-    """
-    
-    # Get global functions
     import sys
     main_module = sys.modules['__main__']
     WEIGHT_KEYS = getattr(main_module, 'WEIGHT_KEYS', None)
@@ -493,60 +451,51 @@ def render_persona_step(datamanager):
         st.session_state.profile_index = 0
     
     if "custom_weights_sliders" not in st.session_state:
-        st.session_state.custom_weights_sliders = {k: v for k, v in travel_profiles[0]["weights"].items()}
+        st.session_state.custom_weights_sliders = copy.deepcopy(travel_profiles[0]["weights"])
     
     if "last_profile_idx" not in st.session_state:
         st.session_state.last_profile_idx = 0
     
-    # ========== LOAD CSS ==========
     load_carousel_css()
     
-    # ========== PAGE TITLE ==========
     st.markdown('<h2 style="text-align: center; margin-bottom: 50px; margin-top: 20px;">Choose Your Travel Persona</h2>', unsafe_allow_html=True)
     
-    # ========== CAROUSEL LOGIC ==========
+    # ========== CAROUSEL ==========
     current_idx = st.session_state.profile_index
     prev_idx = (current_idx - 1) % total_profiles
     next_idx = (current_idx + 1) % total_profiles
     
-    # Create layout with navigation buttons
     col_nav_prev, col_prev, col_active, col_next, col_nav_next = st.columns(
         [0.8, 1.6, 2.5, 1.6, 0.8], 
         vertical_alignment="center",
         gap="medium"
     )
     
-    # ========== PREVIOUS NAVIGATION BUTTON ==========
     with col_nav_prev:
         if st.button("◀", key="nav_prev", help="Previous Profile", use_container_width=True):
             st.session_state.profile_index = prev_idx
             st.rerun()
     
-    # ========== NEXT NAVIGATION BUTTON ==========
     with col_nav_next:
         if st.button("▶", key="nav_next", help="Next Profile", use_container_width=True):
             st.session_state.profile_index = next_idx
             st.rerun()
     
-    # ========== PREVIOUS CARD (GREYED OUT) ==========
     with col_prev:
         st.markdown(create_card_html(travel_profiles[prev_idx], is_active=False), unsafe_allow_html=True)
     
-    # ========== ACTIVE CARD (CENTER, HIGHLIGHTED) ==========
     with col_active:
         st.markdown(create_card_html(travel_profiles[current_idx], is_active=True), unsafe_allow_html=True)
     
-    # ========== NEXT CARD (GREYED OUT) ==========
     with col_next:
         st.markdown(create_card_html(travel_profiles[next_idx], is_active=False), unsafe_allow_html=True)
     
-    # ========== STORE CURRENT SELECTED PROFILE ==========
     selected_profile = travel_profiles[current_idx]
     st.session_state.selected_persona = selected_profile["display_name"]
     
-    # Initialize custom weights with current profile on first load or when carousel changes
+    # Sync weights when profile changes
     if st.session_state.last_profile_idx != current_idx:
-        st.session_state.custom_weights_sliders = {k: v for k, v in selected_profile["weights"].items()}
+        st.session_state.custom_weights_sliders = copy.deepcopy(selected_profile["weights"])
         st.session_state.last_profile_idx = current_idx
     
     # ========== MAIN NEXT BUTTON ==========
@@ -554,33 +503,18 @@ def render_persona_step(datamanager):
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        if st.button("🎯 Next: Swipe & Refine", key="next_btn", type="primary", use_container_width=True):
-            # Commit the weights from custom sliders
-            st.session_state.weights = normalize_weights_100(st.session_state.custom_weights_sliders)
+        if st.button("🎯 Choose this persona", key="next_btn", type="primary", use_container_width=True):
+            final_weights = normalize_weights_100(st.session_state.custom_weights_sliders)
+            st.session_state.weights = final_weights
             st.session_state.persona_active = selected_profile["display_name"]
-            
-            # Advance to next step
             st.session_state.step = 3
             st.rerun()
     
-    # ========== ADVANCED CUSTOMIZATION EXPANDER ==========
+    # ========== FINE-TUNE EXPANDER ==========
     st.markdown('<div style="margin-top: 40px; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
     with st.expander("⚙️ Fine-Tune Your Persona (Optional)"):
-        st.write("Customize the weights for your selected profile. Other values adjust automatically to keep sum = 100.")
+        st.write("Customize the weights. Other values adjust automatically to keep sum = 100.")
         
-        if st.button("🔄 Reset to Persona Defaults", use_container_width=True, key="reset_btn"):
-            st.session_state.custom_weights_sliders = {k: v for k, v in selected_profile["weights"].items()}
-            st.rerun()
-        
-        # Show current total
-        st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
-        total_live = sum(st.session_state.custom_weights_sliders.values())
-        if total_live == 100:
-            st.success(f"✅ Perfect! Sum = {total_live}/100")
-        else:
-            st.warning(f"⚠️ Current sum: {total_live}/100 (will be auto-corrected on next)")
-        
-        # Slider labels with descriptions
         slider_labels = {
             "safety_tugo": "Safety (TuGo Advisory)",
             "cost": "Cost (Cheap is good)",
@@ -599,7 +533,7 @@ def render_persona_step(datamanager):
             "jitter": "Chaos Jitter"
         }
         
-        # Create sliders underlined with auto-redistribution
+        # All sliders - auto-redistribute on each change
         for key in WEIGHT_KEYS:
             current_val = st.session_state.custom_weights_sliders.get(key, 0)
             label = slider_labels.get(key, key.replace('_', ' ').title())
@@ -613,7 +547,7 @@ def render_persona_step(datamanager):
                 key=f"adv_slider_{key}"
             )
             
-            # If value changed, redistribute to keep sum = 100
+            # Sofort redistribuieren bei Änderung
             if new_val != current_val:
                 st.session_state.custom_weights_sliders = redistribute_weights(
                     st.session_state.custom_weights_sliders,
@@ -623,16 +557,21 @@ def render_persona_step(datamanager):
                 )
                 st.rerun()
         
-        # ========== CUSTOM CONTINUE BUTTON ==========
-        st.markdown('<div style="margin-top: 30px; margin-bottom: 15px;"></div>', unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
+        # Status anzeige - immer 100
+        st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
+        st.success(f"✅ Sum = 100/100")
         
-        with col2:
-            if st.button("✨ Continue with Custom Settings", key="custom_next_btn", type="primary", use_container_width=True):
-                # Commit the custom weights
-                st.session_state.weights = normalize_weights_100(st.session_state.custom_weights_sliders)
+        col_r, col_c = st.columns([1, 1])
+        
+        with col_r:
+            if st.button("🔄 Reset to Persona Defaults", use_container_width=True, key="reset_btn"):
+                st.session_state.custom_weights_sliders = copy.deepcopy(selected_profile["weights"])
+                st.rerun()
+        
+        with col_c:
+            if st.button("✨ Continue", key="custom_next_btn", type="primary", use_container_width=True):
+                final_weights = normalize_weights_100(st.session_state.custom_weights_sliders)
+                st.session_state.weights = final_weights
                 st.session_state.persona_active = selected_profile["display_name"]
-                
-                # Advance to next step
                 st.session_state.step = 3
                 st.rerun()
