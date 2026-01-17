@@ -1,5 +1,5 @@
 # ============================================================
-# pathfind_design_v2.py - MINIMAL LIGHT DESIGN
+# pathfind_design_v2.py - MINIMAL LIGHT DESIGN (ICON-SAFE)
 # ============================================================
 
 import streamlit as st
@@ -43,7 +43,6 @@ def find_background_image(img_file: str = "background_light.png") -> str:
 
 def setup_complete_design() -> None:
     """Setup minimal light design."""
-    
     bin_str = find_background_image("background_light.png")
     if not bin_str:
         st.warning("⚠️ Background image not found")
@@ -61,8 +60,8 @@ def setup_complete_design() -> None:
         background-attachment: fixed;
     }}
 
-    /* Text - Dark Blue */
-    p, span, label {{
+    /* Text - Dark Blue (ICON SAFE: no global span/label styling) */
+    p, li {{
         color: rgba(20, 40, 80, 0.95) !important;
         font-family: 'Poppins', sans-serif !important;
     }}
@@ -70,6 +69,7 @@ def setup_complete_design() -> None:
     h1, h2, h3, h4, h5, h6 {{
         color: rgba(15, 35, 75, 1) !important;
         font-weight: 600 !important;
+        font-family: 'Poppins', sans-serif !important;
     }}
 
     a {{
@@ -92,7 +92,7 @@ def setup_complete_design() -> None:
         margin: 0;
         padding: 0;
         color: #FFFFFF;
-        text-shadow: 
+        text-shadow:
             0 0 30px rgba(100, 180, 255, 0.8),
             0 0 60px rgba(100, 180, 255, 0.4),
             -3px 3px 0 rgba(0, 0, 0, 0.3);
@@ -107,27 +107,21 @@ def setup_complete_design() -> None:
     }}
 
     @keyframes slide-down {{
-        from {{
-            opacity: 0;
-            transform: translateY(-30px);
-        }}
-        to {{
-            opacity: 1;
-            transform: translateY(0);
-        }}
+        from {{ opacity: 0; transform: translateY(-30px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
     }}
 
     @keyframes logo-glow {{
         0%, 100% {{
             filter: drop-shadow(0 0 15px rgba(100, 180, 255, 0.6)) brightness(1);
-            text-shadow: 
+            text-shadow:
                 0 0 30px rgba(100, 180, 255, 0.8),
                 0 0 60px rgba(100, 180, 255, 0.4),
                 -3px 3px 0 rgba(0, 0, 0, 0.3);
         }}
         50% {{
             filter: drop-shadow(0 0 25px rgba(100, 180, 255, 0.8)) brightness(1.05);
-            text-shadow: 
+            text-shadow:
                 0 0 40px rgba(100, 180, 255, 0.9),
                 0 0 80px rgba(100, 180, 255, 0.5),
                 -3px 3px 0 rgba(0, 0, 0, 0.3);
@@ -143,18 +137,10 @@ def setup_complete_design() -> None:
     }}
 
     @keyframes float-plane {{
-        0%, 100% {{
-            transform: translateY(0px) rotate(0deg);
-        }}
-        25% {{
-            transform: translateY(-12px) rotate(-5deg);
-        }}
-        50% {{
-            transform: translateY(0px) rotate(0deg);
-        }}
-        75% {{
-            transform: translateY(-12px) rotate(5deg);
-        }}
+        0%, 100% {{ transform: translateY(0px) rotate(0deg); }}
+        25% {{ transform: translateY(-12px) rotate(-5deg); }}
+        50% {{ transform: translateY(0px) rotate(0deg); }}
+        75% {{ transform: translateY(-12px) rotate(5deg); }}
     }}
 
     .pathfind-subtitle {{
@@ -173,14 +159,8 @@ def setup_complete_design() -> None:
     }}
 
     @keyframes fade-in {{
-        from {{
-            opacity: 0;
-            transform: translateY(10px);
-        }}
-        to {{
-            opacity: 1;
-            transform: translateY(0);
-        }}
+        from {{ opacity: 0; transform: translateY(10px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
     }}
 
     </style>
