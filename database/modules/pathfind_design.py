@@ -31,7 +31,7 @@ def setup_complete_design():
     </style>
     """, unsafe_allow_html=True)
     
-    bg_path = "./personas/background.jpg"
+    bg_path = os.path.join(os.getcwd(), "personas", "background.jpg")
     
     if not os.path.exists(bg_path):
         st.error(f"❌ Background nicht gefunden: {bg_path}")
