@@ -1,13 +1,15 @@
 # ============================================================================
-# PERSONA SELECTOR MODULE - FIXED VERSION
+# PERSONA SELECTOR MODULE - FIXED FOR STREAMLIT CLOUD
 # File: modules/persona_selector.py
 # ============================================================================
+
 
 
 import streamlit as st
 import base64
 import os
 from pathlib import Path
+
 
 
 
@@ -19,6 +21,7 @@ def get_img_as_base64(file_path):
         return base64.b64encode(data).decode()
     except Exception:
         return ""
+
 
 
 
@@ -43,6 +46,7 @@ def find_image_source(img_file, img_url):
             pass
     
     return img_url or "https://via.placeholder.com/600x450?text=No+Image"
+
 
 
 
@@ -87,6 +91,7 @@ def load_carousel_css():
         }
 
 
+
         .profile-card.active {
             transform: scale(1.1) rotateY(0deg);
             border: 3px solid #667eea;
@@ -98,12 +103,14 @@ def load_carousel_css():
         }
 
 
+
         .profile-card.inactive {
             transform: scale(0.8) rotateY(25deg);
             opacity: 0.35;
             filter: grayscale(0.7) blur(1.2px);
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
+
 
 
         .card-img-container {
@@ -130,12 +137,14 @@ def load_carousel_css():
         }
 
 
+
         .info-icon-wrapper {
             position: absolute;
             top: 12px;
             right: 12px;
             z-index: 10;
         }
+
 
 
         .info-icon {
@@ -156,11 +165,13 @@ def load_carousel_css():
         }
 
 
+
         .info-icon:hover {
             background: rgba(102, 126, 234, 1);
             transform: scale(1.15);
             box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
         }
+
 
 
         .tooltip {
@@ -189,11 +200,13 @@ def load_carousel_css():
         }
 
 
+
         .info-icon:hover .tooltip {
             opacity: 1;
             pointer-events: auto;
             transform: translateX(-50%) translateY(-8px);
         }
+
 
 
         .nav-button {
@@ -214,11 +227,13 @@ def load_carousel_css():
         }
 
 
+
         .nav-button:hover {
             transform: scale(1.15) translateY(-3px);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5);
             background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
         }
+
 
 
         .nav-button:active {
@@ -230,11 +245,13 @@ def load_carousel_css():
 
 
 
+
 def create_card_html(profile_data, is_active=False):
     """Generate HTML for persona card with centered info tooltip ABOVE the icon."""
     status_class = "active" if is_active else "inactive"
     img_src = find_image_source(profile_data["img_file"], profile_data.get("img_url"))
     description = profile_data['description'].replace('"', '&quot;').replace("'", "&#39;")
+
 
 
     html = f"""
@@ -251,6 +268,7 @@ def create_card_html(profile_data, is_active=False):
     </div>
     """
     return html
+
 
 
 
@@ -355,40 +373,40 @@ def get_travel_profiles():
 
 
 
+
 def enforce_sum_100_proportional(changed_key, weight_keys):
-    """When one slider changes, proportionally reduce others to maintain sum=100."""
-    try:
-        values = {k: int(st.session_state.get(f"adv_{k}", 0)) for k in weight_keys}
-        current_sum = sum(values.values())
-        
-        if current_sum != 100:
-            diff = 100 - current_sum
-            other_keys = [k for k in weight_keys if k != changed_key]
-            
-            if other_keys:
-                other_sum = sum(values[k] for k in other_keys)
-                
-                if other_sum > 0:
-                    for k in other_keys:
-                        if values[k] > 0:
-                            proportion = values[k] / other_sum
-                            adjustment = int(round(diff * proportion))
-                            new_val = max(0, values[k] + adjustment)
-                            st.session_state[f"adv_{k}"] = new_val
-            
-            final_sum = sum(int(st.session_state.get(f"adv_{k}", 0)) for k in weight_keys)
-            if final_sum != 100:
-                diff_needed = 100 - final_sum
-                current_changed = int(st.session_state.get(f"adv_{changed_key}", 0))
-                st.session_state[f"adv_{changed_key}"] = max(0, current_changed + diff_needed)
+    """When one slider changes, proportionally reduce others to maintain sum=100.
+    FIXED FOR STREAMLIT CLOUD - Use direct manipulation without try/except."""
+    values = {k: int(st.session_state.get(f"adv_{k}", 0)) for k in weight_keys}
+    current_sum = sum(values.values())
     
-    except Exception:
-        pass
+    if current_sum != 100:
+        diff = 100 - current_sum
+        other_keys = [k for k in weight_keys if k != changed_key]
+        
+        if other_keys:
+            other_sum = sum(values[k] for k in other_keys)
+            
+            if other_sum > 0:
+                for k in other_keys:
+                    if values[k] > 0:
+                        proportion = values[k] / other_sum
+                        adjustment = int(round(diff * proportion))
+                        new_val = max(0, values[k] + adjustment)
+                        st.session_state[f"adv_{k}"] = new_val
+        
+        # Final adjustment to ensure sum is exactly 100
+        final_sum = sum(int(st.session_state.get(f"adv_{k}", 0)) for k in weight_keys)
+        if final_sum != 100:
+            diff_needed = 100 - final_sum
+            current_changed = int(st.session_state.get(f"adv_{changed_key}", 0))
+            st.session_state[f"adv_{changed_key}"] = max(0, current_changed + diff_needed)
+
 
 
 
 def render_persona_step(datamanager):
-    """Render persona carousel with custom weight tuning."""
+    """Render persona carousel with custom weight tuning - FIXED FOR STREAMLIT CLOUD."""
     
     import sys
     main_module = sys.modules['__main__']
@@ -491,24 +509,6 @@ def render_persona_step(datamanager):
             "hidden_gem": "Hidden Gem Spice",
             "astro": "Astro Spice",
             "jitter": "Chaos Jitter"
-        }
-        
-        slider_help = {
-            "safety_tugo": "Travel safety based on TuGo advisory levels. Higher = safer destinations.",
-            "cost": "Overall cost of living. Higher = more affordable destinations.",
-            "restaurant": "Restaurant prices & value. Higher = better value for dining.",
-            "groceries": "Grocery prices. Higher = cheaper groceries for self-catering.",
-            "rent": "Monthly rental costs. Higher = cheaper long-term accommodation.",
-            "purchasing_power": "Your money goes further. Higher = better purchasing power.",
-            "qol": "Quality of life, infrastructure & comfort. Higher = more comfortable.",
-            "health_care": "Healthcare quality & accessibility. Higher = better healthcare.",
-            "clean_air": "Air quality & pollution levels. Higher = cleaner air.",
-            "culture": "Cultural attractions & UNESCO sites. Higher = more cultural experiences.",
-            "weather": "Weather suitability. Higher = better weather for your preferences.",
-            "luxury_price": "High luxury prices (good for luxury hunters). Higher = premium experiences.",
-            "hidden_gem": "Lesser-known, unique destinations. Higher = more hidden gems.",
-            "astro": "Stargazing & celestial conditions. Higher = better for astronomy.",
-            "jitter": "Chaos factor for spontaneity. Higher = more unpredictable surprises."
         }
         
         # Render sliders in exact WEIGHT_KEYS order
