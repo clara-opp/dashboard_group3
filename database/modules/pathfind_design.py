@@ -72,63 +72,70 @@ def setup_complete_design():
     
     # CONDITIONAL BG - WITH IMAGE OR GRADIENT
     if bin_str:
-        bg_section = f"""
-    /* ========================================
-       BACKGROUND WITH IMAGE - BLURRED
-       ======================================== */
-    html, body, [data-testid="stAppViewContainer"], .stApp {{
-        background-image: url("data:image/jpeg;base64,{bin_str}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        filter: blur(15px) brightness(0.65) contrast(1.1);
-        margin: 0;
-        padding: 0;
-    }}
-    
-    [data-testid="stAppViewContainer"] {{
-        position: relative;
-        z-index: 1;
-    }}
-    
-    [data-testid="stAppViewContainer"]::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(10, 15, 30, 0.55);
-        z-index: 0;
-        pointer-events: none;
-    }}
+        bg_css = f"""
+        /* ========================================
+        BACKGROUND WITH IMAGE - BLURRED
+        ======================================== */
+        html, body {{
+            background-image: url("data:image/jpeg;base64,{bin_str}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0f1e !important;
+        }}
+        
+        [data-testid="stAppViewContainer"]::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/jpeg;base64,{bin_str}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            filter: blur(12px) brightness(0.7);
+            opacity: 1;
+            z-index: -1;
+            pointer-events: none;
+        }}
+        
+        [data-testid="stAppViewContainer"] {{
+            position: relative;
+            z-index: 1;
+        }}
         """
     else:
-        bg_section = """
-    /* ========================================
-       BACKGROUND GRADIENT FALLBACK
-       ======================================== */
-    html, body, [data-testid="stAppViewContainer"], .stApp {{
-        background: linear-gradient(135deg, #0a0f1e 0%, #1a2a3a 50%, #0f1520 100%) !important;
-        background-attachment: fixed;
-        margin: 0;
-        padding: 0;
-    }}
-    
-    [data-testid="stAppViewContainer"]::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(10, 15, 30, 0.4);
-        z-index: 0;
-        pointer-events: none;
-    }}
+        bg_css = """
+        html, body {{
+            background: linear-gradient(135deg, #0a0f1e 0%, #1a2a3a 50%, #0f1520 100%) !important;
+            background-attachment: fixed;
+            margin: 0;
+            padding: 0;
+        }}
+        
+        [data-testid="stAppViewContainer"]::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 15, 30, 0.4);
+            z-index: -1;
+            pointer-events: none;
+        }}
+        
+        [data-testid="stAppViewContainer"] {{
+            position: relative;
+            z-index: 1;
+        }}
         """
-    
+
     complete_css = f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=Space+Mono:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap');
