@@ -6,6 +6,39 @@
 import streamlit as st
 import base64
 import os
+from pathlib import Path
+
+def get_img_as_base64(file_path):
+    """Convert image file to base64."""
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except Exception:
+        return ""
+
+def find_background_image(img_file="background.jpg"):
+    """Find background image in multiple possible directories."""
+    possible_dirs = [
+        "personas",
+        "./personas",
+        os.path.join(os.getcwd(), "personas"),
+        os.path.join(os.path.dirname(__file__), "personas"),
+        str(Path(__file__).parent / "personas"),
+    ]
+    
+    for img_dir in possible_dirs:
+        try:
+            img_path = os.path.join(img_dir, img_file)
+            if os.path.exists(img_path) and os.path.isfile(img_path):
+                b64_img = get_img_as_base64(img_path)
+                if b64_img:
+                    return b64_img
+        except Exception:
+            pass
+    
+    return ""
+
 
 
 def setup_complete_design():
@@ -31,14 +64,10 @@ def setup_complete_design():
     </style>
     """, unsafe_allow_html=True)
     
-    bg_path = os.path.join(os.getcwd(), "personas", "background.jpg")
-    
-    if not os.path.exists(bg_path):
-        st.error(f"❌ Background nicht gefunden: {bg_path}")
-        return
-    
-    with open(bg_path, "rb") as f:
-        bin_str = base64.b64encode(f.read()).decode()
+    bin_str = find_background_image("background.jpg")
+
+    if not bin_str:
+        st.warning("⚠️ Background-Picture not found")
     
     complete_css = f"""
     <style>
