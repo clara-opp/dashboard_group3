@@ -1,6 +1,6 @@
 # ============================================================
-# pathfind_design.py - UNIFIED DARK DESIGN v9
-# WORKS IDENTICALLY ON LOCAL + STREAMLIT CLOUD
+# pathfind_design.py - UNIFIED DARK DESIGN v10
+# FULLY WORKING FOR STREAMLIT CLOUD + LOCAL
 # ============================================================
 
 import streamlit as st
@@ -44,12 +44,11 @@ def find_background_image(img_file="background.jpg"):
 
 def setup_complete_design():
     """
-    ULTIMATE DARK DESIGN v9 - UNIFIED FOR LOCAL + CLOUD:
+    ULTIMATE DARK DESIGN v10 - PRODUCTION READY FOR CLOUD:
     - FORCE DARK MODE überall
-    - Dunkel Hintergrund (konsistent)
+    - Dunkel Hintergrund mit Blur (nur Background, nicht Content)
     - HELLER TEXT überall (Kontrast-optimiert)
-    - DUNKEL BUTTONS - AGGRESSIVE SELECTORS
-    - BLUR direkt auf MAIN background (nicht ::before)
+    - DUNKEL BUTTONS - ALL STATES COVERED
     - WORKS IDENTICALLY EVERYWHERE
     - MOBILE RESPONSIVE
     """
@@ -68,74 +67,77 @@ def setup_complete_design():
     bin_str = find_background_image("background.jpg")
 
     if not bin_str:
-        st.warning("⚠️ Background-Picture not found - using gradient")
+        st.warning("⚠️ Background image not found - using gradient fallback")
     
-    # CONDITIONAL BG - WITH IMAGE OR GRADIENT
+    # Build CSS based on whether image exists
     if bin_str:
         bg_css = f"""
-        /* ========================================
-        BACKGROUND WITH IMAGE - BLURRED
-        ======================================== */
-        html, body {{
-            background-image: url("data:image/jpeg;base64,{bin_str}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-            margin: 0;
-            padding: 0;
-            background-color: #0a0f1e !important;
-        }}
-        
-        [data-testid="stAppViewContainer"]::before {{
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url("data:image/jpeg;base64,{bin_str}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            filter: blur(12px) brightness(0.7);
-            opacity: 1;
-            z-index: -1;
-            pointer-events: none;
-        }}
-        
-        [data-testid="stAppViewContainer"] {{
-            position: relative;
-            z-index: 1;
-        }}
+    /* ========================================
+       BACKGROUND WITH IMAGE - BLURRED ONLY
+       ======================================== */
+    html, body {{
+        background-image: url("data:image/jpeg;base64,{bin_str}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        margin: 0;
+        padding: 0;
+        background-color: #0a0f1e !important;
+    }}
+    
+    [data-testid="stAppViewContainer"]::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url("data:image/jpeg;base64,{bin_str}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        filter: blur(12px) brightness(0.7);
+        opacity: 1;
+        z-index: -1;
+        pointer-events: none;
+    }}
+    
+    [data-testid="stAppViewContainer"] {{
+        position: relative;
+        z-index: 1;
+    }}
         """
     else:
         bg_css = """
-        html, body {{
-            background: linear-gradient(135deg, #0a0f1e 0%, #1a2a3a 50%, #0f1520 100%) !important;
-            background-attachment: fixed;
-            margin: 0;
-            padding: 0;
-        }}
-        
-        [data-testid="stAppViewContainer"]::before {{
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 15, 30, 0.4);
-            z-index: -1;
-            pointer-events: none;
-        }}
-        
-        [data-testid="stAppViewContainer"] {{
-            position: relative;
-            z-index: 1;
-        }}
+    /* ========================================
+       BACKGROUND GRADIENT FALLBACK
+       ======================================== */
+    html, body {{
+        background: linear-gradient(135deg, #0a0f1e 0%, #1a2a3a 50%, #0f1520 100%) !important;
+        background-attachment: fixed;
+        margin: 0;
+        padding: 0;
+    }}
+    
+    [data-testid="stAppViewContainer"]::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(10, 15, 30, 0.4);
+        z-index: -1;
+        pointer-events: none;
+    }}
+    
+    [data-testid="stAppViewContainer"] {{
+        position: relative;
+        z-index: 1;
+    }}
         """
-
+    
     complete_css = f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=Space+Mono:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -151,7 +153,7 @@ def setup_complete_design():
         color-scheme: dark !important;
     }}
     
-    {bg_section}
+    {bg_css}
     
     /* ========================================
        UNIVERSAL TEXT - MAXIMUM CONTRAST
