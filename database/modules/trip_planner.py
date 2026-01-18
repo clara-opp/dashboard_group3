@@ -206,7 +206,7 @@ def serper_search_prices(query: str):
 
 
 # ---------- OpenAI tool-calling loop ----------
-def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str, currency: str):
+def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str, currency: str, city: str):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
     found_places = []
     
@@ -236,13 +236,15 @@ def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str,
             "You are a day-trip planner.\n"
             "Goal: propose a realistic day-trip itinerary within the user's fixed budget.\n"
             "Rules:\n"
-            "- Use google_search_places to fetch real nearby places. You MUST generate ALL search queries for the entire day (morning, afternoon, evening) if not specified otherwise by the user.\n"
-            "- EVERY trip plan MUST include food recommendations for each day: 1 breakfast spot for the morning, 1 lunch option (restaurant or street food), and 1 dinner option (restaurant or street food).\n"
+            "- Use google_search_places to fetch real nearby places. You MUST generate ALL search queries for the entire day if not specified otherwise by the user.\n"
             "- Once you have searched for places, the system will automatically provide real-world price data for them. Use that data for your budget calculations.\n"
-            "- Target spending: Aim for a total cost between 85% and 90% of the budget. Never exceed the budget.\n"
+            "- Target spending: Aim for a total cost between 85% and 90% of the budget. Never exceed the budget. Do NOT mention these percentages or internal budget rules to the user.\n"
             "- Use the provided price data for every activity. Do not include disclaimers like 'could not be retrieved'; use the data provided or your best estimate if data is missing.\n"
-            "- Return a JSON object with one key: 'itinerary'.\n"
-            "- 'itinerary' MUST be a list of objects. Each object MUST have: 'id' (the google place_id), 'time_range' (e.g. '09:00-10:30'), 'description' (2-3 sentences), and 'price' (numeric value in {currency}).\n"
+            "- IMPORTANT: Disregard all previous locations or search results if the search center (ll) has changed. Only use places found in the CURRENT tool calls.\n"
+            "- ID MATCHING: You MUST use the exact 'place_id' string from the tool output (e.g., 'places/ChIJ...'). NEVER use numbers like 1, 2, or 3 as IDs.\n"
+            "- Return a JSON object with two keys: 'assistant_message' and 'itinerary'.\n"
+            "- 'assistant_message': A brief, friendly conversational response. Use PLAIN TEXT ONLY. No headers or bolding.\n"
+            "- 'itinerary': A list of objects. Each MUST have: 'id', 'time_range', 'description', 'price_cleaned' (numeric), and travel estimates to the next stop: 'travel_car', 'travel_transit', 'travel_foot' (numeric minutes only, or null if unknown).\n"
             "- STRICTLY PROHIBITED: 'Optional' activities, alternatives, or 'if time permits' suggestions. Provide exactly one definitive path.\n"
             ),
     }
@@ -269,6 +271,7 @@ def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str,
     tool_calls = getattr(msg, "tool_calls", None)
 
     if not tool_calls:
+        enriched_data = []
         print(f"DEBUG: AI decided NOT to call any tools. Content: {msg.content[:100]}...")
 
     if tool_calls:
@@ -289,8 +292,9 @@ def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str,
                 
                 if fn == "google_search_places":
                     print(f"DEBUG: Executing Google Search: {args.get('query')}")
+                    refined_query = f"{args.get('query', '')} in {city}"
                     out = google_search_places(
-                        query=args.get("query", ""),
+                        query=refined_query,
                         ll=args.get("ll", ll),
                         radius=int(args.get("radius", radius)),
                         limit=int(args.get("limit", 8)),
@@ -341,10 +345,9 @@ def run_planner(messages, ll: str, radius: int, budget_val: float, persona: str,
             response_format={"type": "json_object"},
             stream=False,
         )
-        return final_resp.choices[0].message.content or "", found_places
+        return final_resp.choices[0].message.content or "", found_places, enriched_data
 
-    # If no tools were called in Phase 1, return the initial text
-    return (msg.content or "(No response text.)"), found_places
+    return (msg.content or "(No response text.)"), found_places, []
 
 
 # ---------- Streamlit UI ----------
@@ -598,7 +601,7 @@ def show_trip_planner():
         st.stop()
     
     # Settings moved from sidebar to main area so they only appear within this tab
-    with st.expander("🌍 Trip Settings", expanded=True):
+    with st.expander("Trip Settings", expanded=True):
         # Strip names after commas normally, but for Congo only remove the comma to keep both republics distinct
         name_to_code = {
             (c.name.replace(',', '') if "Congo" in c.name else c.name.split(',')[0]): c.alpha_2 
@@ -652,6 +655,16 @@ def show_trip_planner():
         radius = st.slider("Search radius (m)", 500, 20000, 5000, step=500)
         currency_symbol = st.session_state.get('currency_symbol', '€')
         budget = st.number_input(f"Budget ({currency_symbol})", min_value=0.0, value=40.0, step=5.0)
+
+    # --- Fix: Reset chat if location changes to prevent Mannheim/Weinheim contamination ---
+    current_location_key = f"{selected_country}-{selected_city}"
+    if st.session_state.get("last_location_key") != current_location_key:
+        st.session_state.messages = [
+            {"role": "assistant", "content": f"I'm ready to plan your trip in {selected_city}, {selected_country}! Would like to enjoy sightseeing, shopping, great restaurants or something else?"}
+        ]
+        st.session_state.map_data = {"places": [], "center": None}
+        st.session_state.last_location_key = current_location_key
+        st.rerun()
     
     if "model" not in st.session_state:
         st.session_state.model = "gpt-5-nano-2025-08-07"
@@ -698,14 +711,20 @@ def show_trip_planner():
                         ]
                         
                         persona = st.session_state.get('selected_persona', 'General Traveler')
-                        raw_json, places = run_planner(planner_messages, ll=ll, radius=radius, budget_val=budget, persona=persona, currency=currency_symbol)
+                        raw_json, places, prices_list = run_planner(planner_messages, ll=ll, radius=radius, budget_val=budget, persona=persona, currency=currency_symbol, city=selected_city)
                         try:
                             data = json.loads(raw_json)
                         except:
                             data = {}                                   
 
                         st.session_state.map_data = {"places": [], "center": ll}
-                        itinerary_md = []
+                        
+                        # 1. Show Assistant Message
+                        assistant_text = data.get("assistant_message", "").replace("#", "").replace("*", "").strip()
+                        if assistant_text:
+                            st.write(assistant_text)
+                        
+                        itinerary_md = [assistant_text, "---"] if assistant_text else []                        
                         
                         if isinstance(data, dict) and "itinerary" in data:
                             for entry in data["itinerary"]:
@@ -720,17 +739,34 @@ def show_trip_planner():
                                     name = match.get("name", "Unknown Place")
                                     time = entry.get("time_range", "TBD")
                                     desc = entry.get("description", "")
-                                    price = entry.get("price", 0)
+
+                                    # Deterministic travel time formatting
+                                    def fmt(v): return f"{v} min" if v and str(v).isdigit() else "-"
+                                    t_car = fmt(entry.get("travel_car"))
+                                    t_bus = fmt(entry.get("travel_transit"))
+                                    t_walk = fmt(entry.get("travel_foot"))
+
+                                    # Post-AI Assembly: Pull price from Serper data, not AI imagination
+                                    price = entry.get("price_cleaned", "Check website")
                                     
-                                    itinerary_md.append(f"### {time} - {name}")
-                                    itinerary_md.append(f"- **Description**: {desc}")
-                                    itinerary_md.append(f"- **Price**: €{price}")
-                                    itinerary_md.append("")
+                                    stop_md = (
+                                        f"### {time} - {name}\n"
+                                        f"- 📝 **Description**: {desc}\n"
+                                        f"- 💰 **Estimated Cost**: {currency_symbol}{price}\n"
+                                        f"- 🚶 **Travel to next stop**:\n"
+                                        f"  - 🏃 Foot: {t_walk}\n"
+                                        f"  - 🚌 Public Transport: {t_bus}\n"
+                                        f"  - 🚗 Car: {t_car}\n"
+                                    )
+                                    st.markdown(stop_md)
+                                    itinerary_md.append(stop_md)
+                                else:
+                                    # Fallback if AI hallucinates an ID from a previous city
+                                    print(f"DEBUG: AI suggested ID {pid} which was not found in current results.")                                    
 
-                        # Define the answer by joining the markdown list
-                        answer = "\n".join(itinerary_md) if itinerary_md else raw_json      
+                        answer = "\n".join(itinerary_md)
+                        if not itinerary_md: answer = raw_json
 
-                        st.markdown(answer)
                         st.session_state.messages.append({"role": "assistant", "content": answer})
                         st.rerun()
 
@@ -758,5 +794,45 @@ def show_trip_planner():
             m = create_beautiful_map(map_info, radius, center_ll)
             
             st_folium(m, width="100%", height=650, key="persistent_map")
+
+            # Construct Google Maps Directions URL at the bottom of the map column
+            if len(st.session_state.map_data["places"]) >= 2:
+                p_list = st.session_state.map_data["places"]
+                origin = f"{p_list[0]['latitude']},{p_list[0]['longitude']}"
+                destination = f"{p_list[-1]['latitude']},{p_list[-1]['longitude']}"
+                waypoints = "|".join([f"{p['latitude']},{p['longitude']}" for p in p_list[1:-1]])
+                gmaps_url = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&waypoints={waypoints}&travelmode=walking"
+                
+                # Inject CSS to make the button more compact and match Pathfind colors
+                st.markdown("""
+                    <style>
+                        .stLinkButton {
+                            margin-top: -30px !important;
+                        .stLinkButton > a {
+                            height: 32px !important;
+                            font-size: 13px !important;
+                            background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%) !important;
+                            color: #333 !important;
+                            border: 2px solid #e0e5ed !important;
+                            border-radius: 10px !important;
+                            text-decoration: none !important;
+                            font-weight: 600 !important;
+                            display: inline-flex !important;
+                            align-items: center !important;
+                            transition: all 0.3s ease !important;
+                        }
+                        .stLinkButton > a:hover {
+                            background: linear-gradient(135deg, #1a237e 0%, #283593 100%) !important;
+                            color: white !important;
+                            border-color: #1a237e !important;
+                            box-shadow: 0 4px 12px rgba(26, 35, 126, 0.2) !important;
+                        }
+                    </style>
+                """, unsafe_allow_html=True)
+
+                # Align button to the left
+                col_btn, _ = st.columns([0.5, 0.5])
+                with col_btn:
+                    st.link_button("🌍 Open in Google Maps", gmaps_url)
         else:
             st.info("🎯 The map will appear here once a trip is planned.")

@@ -2,10 +2,16 @@
 
 1.1 Fix estimated flight costs information icon (to include that the costs are for a round trip flight with one adult)
 
+1.2 Default image for countries with no image
+
+1.3 Requirements text updaten
+
+1.4 APIs in impressum reinpacken und datensatz link in die gruppe
+
+1.5 Fix google calendar (currently flight is not added the first time you register your gmail)
+
 2. Activity Planner (should be the tab next to flight search)
-    1. Provide the chatbot with all the information the user already entered, e.g. travel profile, swiping cards, destination country. Then let the chatbot plan 3 unique days based on that information. The computation and API calls should start as soon as the user presses the "View Details" button for the top destination results so that the results for the planned 3 unique days are ready as soon as the user navigates to the activity planner tab. The total costs of the trip should be shown as well as the number of adults and children the trip was planned for (leave out infants because they usually don't cost anything).
-    Extras:
-        - Use Google Routes API to generate travel time by foot, car and public transport
+    - Use Google Routes API to generate travel time by foot, car and public transport
 
 3. Downloadable results for the activity planner (which format? pdf? google maps?)
 
