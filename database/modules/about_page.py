@@ -4,25 +4,6 @@ import os
 import datetime
 
 
-def _badge(text: str, icon: str = "✅"):
-    st.markdown(
-        f"""
-        <div style="
-            display:inline-flex; align-items:center; gap:8px;
-            padding:6px 12px; border-radius:999px;
-            background: rgba(25, 35, 55, 0.75);
-            border: 1px solid rgba(120, 170, 240, 0.35);
-            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-            font-weight:600; font-size:0.95rem;
-        ">
-            <span style="font-size:1.05rem;">{icon}</span>
-            <span>{text}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _section_title(title: str, subtitle: str = ""):
     st.markdown(
         f"""
@@ -45,7 +26,7 @@ def _section_title(title: str, subtitle: str = ""):
     )
 
 
-def _mini_card(title: str, body_html: str, icon: str = "📌"):
+def _mini_card(title: str, body_html: str):
     # IMPORTANT: body_html should be HTML (not markdown) to avoid the </div> artifact.
     st.markdown(
         f"""
@@ -58,9 +39,8 @@ def _mini_card(title: str, body_html: str, icon: str = "📌"):
             backdrop-filter: blur(16px);
             height: 100%;
         ">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                <div style="font-size:1.35rem;">{icon}</div>
-                <div style="font-size:1.1rem; font-weight:750;">{title}</div>
+            <div style="font-size:1.1rem; font-weight:750; margin-bottom:8px;">
+                {title}
             </div>
             <div style="color: rgba(255,255,255,0.82); font-size:0.98rem; line-height:1.55;">
                 {body_html}
@@ -76,6 +56,7 @@ def _html_list(items):
     return f"<ul style='margin-top:0; line-height:1.9;'>{lis}</ul>"
 
 
+# Kept from old draft (even if not used anymore) to avoid breaking anything if you re-add later.
 def _req_block(title: str, lines):
     st.markdown(
         f"""
@@ -107,38 +88,21 @@ def _req_block(title: str, lines):
 
 def render_about_page():
     _section_title(
-        "ℹ️ Pathfind — About",
-        "A personalized travel planner dashboard — documentation for workflow, data, scoring, modules, and integrations.",
+        "Pathfind — About",
+        "A live, interactive travel planner dashboard — documentation for workflow, data, scoring, modules, and integrations.",
     )
 
-    st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-
-    c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-    with c1:
-        _badge("Step-based flow", "🧭")
-    with c2:
-        _badge("Unified SQLite DB", "🗄️")
-    with c3:
-        _badge("Interpretable scoring", "🧠")
-    with c4:
-        _badge("Seeds for diversity", "🎲")
-
-    st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
     tabs = st.tabs(
         [
-            "🌍 Overview",
-            "🧭 Workflow",
-            "📊 Data & Sources",
-            "🧠 Scoring",
-            "💸 Cost Estimator",
-            "✈️ Flight Search",
-            "🗺️ Path Finder",
-            "🧾 Export / PDF",
-            "🔐 APIs & Security",
-            "🧰 Requirements",
-            "🛡️ Privacy",
-            "🏛️ Impressum",
+            "Overview",
+            "Workflow",
+            "Data & Sources",
+            "Scoring",
+            "Modules",
+            "What makes Pathfind special",
+            "Impressum",
         ]
     )
 
@@ -148,13 +112,17 @@ def render_about_page():
     with tabs[0]:
         _section_title(
             "What is Pathfind?",
-            "Pathfind helps users discover travel destinations that match their preferences — with explainable ranking and rich country-level details.",
+            "A live and interactive travel planning dashboard with explainable ranking and integrated planning tools.",
         )
 
         st.markdown(
             """
-**Pathfind** is an interactive Streamlit dashboard that supports users in finding travel destinations that match their personal preferences.  
-The system combines country-level datasets (cost of living, quality of life, safety, climate, equality indicators) with user input (persona, swipes, filters) to compute an interpretable destination ranking and provide country-level details including flight estimates and trip + route planning modules.
+**Pathfind is a live and interactive Streamlit dashboard** that helps users discover travel destinations that match their preferences.  
+Users can explore destinations by dynamically adjusting profiles, sliders, filters, and constraints — and the ranking updates immediately as the system recomputes scores.
+
+Pathfind is **interactive** because it works like a guided exploration or mini-game: users can select personas, answer swipe questions, tune preferences, and (optionally) interact with chatbot features for questions and planning.
+
+Pathfind is **live** because selected components rely on live API calls (e.g., flight search, routing, interactive planning), and because parts of the underlying database contain regularly updated snapshots of external sources (e.g., travel safety and entry information). The system is therefore a hybrid of curated database signals and live services.
             """
         )
 
@@ -167,15 +135,16 @@ The system combines country-level datasets (cost of living, quality of life, saf
                 _html_list(
                     [
                         "A ranked list of destinations (Top Matches)",
-                        "Category-based score explanations (\"Peek behind the score\")",
-                        "Country dashboard with deeper info",
-                        "Cost Estimator (Numbeo items + trip budgeting)",
+                        "Transparent score explanations (\"Peek behind the score\")",
+                        "Country dashboard with contextual travel information",
+                        "Cost Estimator for trip budgeting (item-level prices)",
                         "Flight context and optional live flight search flow",
-                        "Trip planning / route planning support for the selected destination",
-                        "Optional calendar export via Google OAuth",
+                        "Trip Planner for itinerary building and routing support",
+                        "Optional calendar export (if enabled)",
+                        "Optional chatbot interaction for Q&A, explanations, and planning (if enabled)",
+                        "Optional export/summary as PDF (if enabled in the main dashboard)",
                     ]
                 ),
-                icon="🎯",
             )
         with b:
             _mini_card(
@@ -184,18 +153,17 @@ The system combines country-level datasets (cost of living, quality of life, saf
                     [
                         "Not a guarantee of safety, pricing, or availability",
                         "Not a replacement for official advisories",
-                        "Not a live booking engine by default (estimates can differ from market prices)",
+                        "Not a pure booking engine (estimates can differ from market prices)",
                         "Not a city-level model — many inputs are country-level averages",
                     ]
                 ),
-                icon="⚠️",
             )
 
     # ------------------------------------------------------------
     # WORKFLOW
     # ------------------------------------------------------------
     with tabs[1]:
-        _section_title("✅ How Pathfind Works (Step Flow)")
+        _section_title("Workflow", "How users move through Pathfind")
 
         st.markdown(
             """
@@ -204,79 +172,68 @@ A typical user run looks like this:
             """
         )
 
-        with st.expander("Step 1 — Basic Setup (Origin, Dates, LGBTQ+ Filter)", expanded=True):
+        with st.expander("Step 1 — Basic Setup (Origin, Dates, Filters)", expanded=True):
             st.markdown(
                 """
-Users select:
-- starting airport (currently **Germany/FRA** or **USA/ATL**),
-- vacation dates,
-- optional **LGBTQ+ Safe Travel Filter**.
-
-This step initializes a **new run**, including generating **new random seeds** used for controlled randomness in later stages.
+Users select origin and travel dates and can activate optional filters (e.g., safety-related indicators).  
+This step initializes a new run (including fresh randomized elements used later in the flow).
                 """
             )
 
         with st.expander("Step 2 — Persona Selector", expanded=False):
             st.markdown(
                 """
-Users choose a persona profile (e.g., budget traveler, luxury, explorer).  
+Users choose a persona (e.g., budget, explorer, comfort-oriented).  
 Personas set structured default weights across decision dimensions.
                 """
             )
 
-        with st.expander("Step 3 — Swipe Questionnaire (Randomized Mini-Run)", expanded=False):
+        with st.expander("Step 3 — Swipe Interaction (Compact Preference Refinement)", expanded=False):
             st.markdown(
                 """
-Pathfind uses a compact swipe flow: the app draws **6 random swipe cards per run**.
-- The selection is randomized but **seed-controlled** so it stays consistent within the same run.
-- Each swipe updates weights and preferences (e.g., weather target temperature, cost emphasis, clean air).
+Pathfind uses a compact swipe flow: the app draws a small set of swipe cards per run.
+- The selection is randomized but stable within a run.
+- Each swipe updates weights and preferences (e.g., climate preference, cost emphasis, air quality).
                 """
             )
 
-        with st.expander("Step 4 — Tarot (Optional)", expanded=False):
+        with st.expander("Step 4 — Optional Extensions (e.g., Tarot inspiration)", expanded=False):
             st.markdown(
                 """
-Users can optionally draw a Tarot card:
-- Tarot card draw comes from the **Roxy API**.
-- The resulting card name + orientation is matched against a mapping table (**`tarot_countries`**) in the project database.
-
-If activated, Tarot-linked countries receive a controlled boost (via the **`astro`** weight).
+Users can optionally activate playful extensions that modify the candidate set or apply controlled boosts.
                 """
             )
 
-        with st.expander("Step 5 — Ban List (Optional)", expanded=False):
+        with st.expander("Step 5 — Ban List / Region Exclusions (Optional)", expanded=False):
             st.markdown(
                 """
-Users can exclude entire world regions.
-Each region maps to a fixed ISO3 list (**`REGION_TO_ISO3`**).  
-All matching countries are removed before scoring.
+Users can exclude world regions.  
+Excluded regions are mapped to ISO3 country lists and removed prior to scoring.
                 """
             )
 
         with st.expander("Step 6 — Matching Results + Explanation", expanded=False):
             st.markdown(
                 """
-The system loads the base dataset, applies filters, computes sub-scores and a final score, and displays the top destinations.
-Each result contains a “Peek behind the score” explanation showing category contributions.
+The system loads the base dataset, applies filters, computes sub-scores and a final score, and displays top destinations.
+Each result includes an explanation showing how categories contributed to the match.
                 """
             )
 
-        with st.expander("Step 7 — Country Dashboard (Details + Planning)", expanded=False):
+        with st.expander("Step 7 — Country Dashboard + Planning", expanded=False):
             st.markdown(
                 """
-The Country Dashboard provides:
-- country overview and contextual info,
-- trip planning module,
-- Path Finder route planning support,
-- cost estimator breakdown (optional),
-- optional deep dives and generated explanation content.
+Users inspect destination details and can use planning modules:
+- Cost Estimator (trip budgeting)
+- Trip Planner (itinerary / routing support)
+- Optional chat assistance for questions and planning (if enabled)
                 """
             )
 
         with st.expander("Step 8–9 — Booking + Confirmation (Flights + Calendar Export)", expanded=False):
             st.markdown(
                 """
-Users can proceed to flight booking and optionally export trip information into **Google Calendar** via OAuth.
+Users can proceed to flight search and optionally export calendar events via Google OAuth (if enabled).
                 """
             )
 
@@ -285,47 +242,67 @@ Users can proceed to flight booking and optionally export trip information into 
             "Run behavior (freshness)",
             _html_list(
                 [
-                    "During a run, seeds keep randomized components stable (repeatable UI within the run).",
-                    "A new run (Start Over + Step 1) generates fresh seeds for variety and new outcomes.",
+                    "Within a run, randomized components remain stable so the experience is consistent.",
+                    "Starting a new run resets the flow and refreshes randomized elements for variety.",
                 ]
             ),
-            icon="🎲",
         )
 
     # ------------------------------------------------------------
     # DATA & SOURCES
     # ------------------------------------------------------------
     with tabs[2]:
-        _section_title("📊 Data Sources & Database Structure")
+        _section_title("Data & Sources", "Database structure, providers, and credits")
 
         st.markdown(
             """
-All structured country-level data is stored in a unified SQLite database (**`unified_country_database.db`**), which serves as the single source of truth.
+All structured country-level data is stored in a unified SQLite database (`unified_country_database.db`), which serves as the single source of truth.
+The database combines curated data and regularly updated snapshots of external sources.
             """
         )
 
-        st.markdown("### Key tables (core)")
         st.markdown(
             """
-- **countries**: ISO codes, country name, images, advisory states  
-- **numbeo_indices**: cost of living, rent, groceries, restaurant, purchasing power, QoL, healthcare, pollution  
-- **climate_monthly**: average temperatures  
-- **unesco_heritage_sites**: UNESCO counts per country  
-- **airports**: airport mapping and metadata  
-- **flight_costs**: flight estimate samples between origin and major destination airports  
-- **equality_index**: equality scores used for LGBTQ+ filter  
-- **tugo_safety, tugo_health, tugo_entry**: travel guidance detail tables  
-- **tarot_countries**: tarot card mapping to countries + travel meanings  
+### How the database is organized (conceptual)
+
+Pathfind is built around a **country backbone** that uses standardized **ISO3 country codes** to merge data from multiple domains.
+Instead of keeping everything in one wide file, the project stores **domain-specific entities** in separate tables and joins them when assembling the dashboard views.
+
+In practice, the database contains:
+- a **country reference layer** (country names, ISO codes, metadata),
+- **indices and prices** (cost-of-living indices, item definitions, item prices, exchange-rate snapshots),
+- **travel information** (entry requirements, safety notes, health guidance, local laws, offices),
+- **context signals** (heritage sites, climate aggregates),
+- **travel/transport connectors** (airport mappings and flight-cost samples).
+
+When Pathfind builds the candidate set for scoring, it merges these entities primarily through **ISO3 keys** (and, for flights, via **airport/IATA mappings**).
+This structure keeps the system maintainable (tables can be updated independently) and makes it easier to explain where each signal originates.
             """
+        )
+
+        _mini_card(
+            "Examples of entities (not exhaustive)",
+            _html_list(
+                [
+                    "<b>countries</b>: ISO3 backbone and country metadata",
+                    "<b>numbeo_indices / numbeo_items / numbeo_prices</b>: indices, item taxonomy, and price snapshots used for both scoring and budgeting",
+                    "<b>tugo_entry / tugo_safety / tugo_health / tugo_laws / tugo_offices</b>: structured travel information stored as database tables",
+                    "<b>unesco_by_country / unesco_heritage_sites</b>: heritage counts and site metadata",
+                    "<b>climate_monthly</b>: aggregated climate indicators (monthly averages)",
+                    "<b>airports / flight_costs</b>: airport mapping layer and flight-cost samples for fast flight context",
+                ]
+            ),
         )
 
         st.markdown("### How the base dataset is assembled")
         st.markdown(
             """
 Pathfind assembles a country-level candidate dataset by joining:
-- `countries` with Numbeo indices, climate averages, UNESCO counts, and equality indicators
-- and (optionally) flight estimates from `flight_costs` via major airports  
-After joins, the dataset is deduplicated to one row per country (ISO3), preferring rows with fewer missing values.
+- a core country table with indices/prices, climate aggregates, heritage counts, and equality-related indicators,
+- and (optionally) flight context via airport mapping + flight cost samples.  
+
+After joins, the dataset is deduplicated to one row per country (ISO3), preferring rows with fewer missing values.  
+This provides a stable base for ranking while keeping the underlying entities modular and updateable.
             """
         )
 
@@ -335,377 +312,370 @@ After joins, the dataset is deduplicated to one row per country (ISO3), preferri
             "Data providers & credits",
             _html_list(
                 [
-                    "<b>Numbeo</b> — cost of living indices + item-level prices (scoring + cost estimator)",
-                    "<b>Tugo</b> — travel advisories (safety / health / entry guidance)",
-                    "<b>UNESCO</b> — World Heritage Sites (counts and examples)",
-                    "<b>Climate data</b> — monthly average temperatures (aggregated in DB)",
-                    "<b>Amadeus</b> — flight search and itinerary/price signals",
-                    "<b>Google APIs</b> — calendar export (OAuth) + maps/routing support",
-                    "<b>Roxy API</b> — tarot card draw (optional, playful extension)",
-                    "<b>Serper</b> — search-based enrichment for routing / POIs (if enabled)",
-                    "<b>OpenAI</b> — LLM-generated explanations in the country dashboard (if enabled)",
+                    "<b>Numbeo</b> — cost of living indices and item-level prices (scoring + cost estimator)",
+                    "<b>Tugo</b> — travel advisories (safety / health / entry), stored as database tables",
+                    "<b>Auswärtiges Amt</b> — official travel information (Germany)",
+                    "<b>UNESCO</b> — World Heritage Sites (counts and site metadata)",
+                    "<b>Berkeley Earth</b> — climate and weather data inputs",
+                    "<b>Amadeus</b> — live flight search and itinerary/price signals",
+                    "<b>Google APIs</b> — calendar export and routing/map support",
+                    "<b>Serper</b> — search enrichment for POIs / planning",
+                    "<b>OpenAI</b> — chatbot interaction and generated explanations",
+                    "<b>Roxy</b> — tarot card draw (optional extension)",
                 ]
             ),
-            icon="🙏",
+        )
+
+        _mini_card(
+            "API keys and setup note",
+            _html_list(
+                [
+                    "Some functionality requires API keys (e.g., flights, routing, chatbot interaction).",
+                    "In addition, some database-backed signals originate from providers whose data is refreshed over time (e.g., travel advisories).",
+                    "Setup instructions, dependencies, and packages are documented in the GitHub repository.",
+                ]
+            ),
         )
 
         _mini_card(
             "Important note",
-            "Some signals are country-level averages. They provide guidance but cannot capture city-level or individual-level variation.",
-            icon="ℹ️",
+            "Several signals are country-level aggregates. They provide guidance but cannot capture city-level or individual-level variation.",
         )
 
     # ------------------------------------------------------------
     # SCORING
     # ------------------------------------------------------------
     with tabs[3]:
-        _section_title("🧠 Scoring & Matching Logic")
+        _section_title("Scoring", "Explainable matching and ranking")
 
         st.markdown(
             """
-Pathfind computes interpretable sub-scores in the range **0–1** and combines them into a final score using user-defined weights.
+Pathfind computes interpretable sub-scores in the range 0–1 and combines them into a final score using user-defined weights.
+The goal is transparency: users should be able to understand why a destination ranks high or low.
+
+At a high level, scoring follows the same structure across categories:
+
+1) build a clean country-level dataset (joined by ISO3)  
+2) transform raw indicators into comparable 0–1 sub-scores  
+3) combine sub-scores using weights derived from personas + interactions  
+4) produce explanations that show category contributions (“Peek behind the score”)
             """
         )
 
-        with st.expander("Normalization (winsorize + min-max)", expanded=True):
+        with st.expander("Step A — Candidate set & preprocessing", expanded=True):
             st.markdown(
                 """
-For each numeric indicator:
-- values are **winsorized** (5th–95th percentile) to reduce outlier impact  
-- then **min-max normalized** to 0–1  
+Before any scoring happens, Pathfind constructs a candidate set of countries:
+
+- Countries are loaded from the unified database and merged across domains using ISO3 keys.
+- Filters remove countries that should not be considered (e.g., region exclusions or safety-related filters).
+- If multiple rows can exist for a country after joins (due to missingness or duplicates), the dataset is deduplicated to a single ISO3 row.
+- Missing values are handled conservatively (e.g., skip a signal if it is not available, or use a neutral/default behavior depending on the feature).
+                """
+            )
+        with st.expander("Step B — Missing value handling (neutral & conservative)", expanded=False):
+            st.markdown(
+                """
+        Pathfind integrates multiple data sources (e.g., cost indices, climate, flights, safety and equality indicators).
+        Because coverage differs across providers, some values can be missing.
+
+        Missing values are handled conservatively to keep the ranking stable and fair:
+
+        - If multiple records exist for a country, the version with the fewest missing values is retained.
+        - For most numeric indices, missing values are replaced with the median across available countries,
+        resulting in a neutral “middle-of-the-pack” contribution.
+        - If an entire feature is unavailable, it is treated as neutral so it does not distort the ranking.
+        - Feature-specific rules apply where necessary (e.g., missing equality data cannot pass the LGBTQ+ filter).
+        - In the UI (e.g., cost estimator or flight info), missing data is explicitly marked rather than guessed.
+
+        This strategy avoids automatically penalizing destinations simply because some data is unavailable.
+                """
+            )
+        with st.expander("Step C — Outlier handling (winsorization)", expanded=False):
+            st.markdown(
+                """
+Raw indicators can contain extreme values that would dominate a min–max scaling.
+To keep the ranking stable, Pathfind applies winsorization to numeric indicators:
+
+- Values below the 5th percentile are capped at the 5th percentile.
+- Values above the 95th percentile are capped at the 95th percentile.
+
+This keeps scoring sensitive to meaningful differences while preventing single outliers from pushing everything else toward 0.
+                """
+            )
+
+        with st.expander("Step D — Normalization to 0–1", expanded=False):
+            st.markdown(
+                """
+After winsorization, indicators are normalized to a common scale:
+
+- Standard approach: min–max scaling to the range 0–1.
+- Direction is aligned to “higher is better” for each category.
 
 Examples:
-- lower cost-of-living → higher `cost_score`  
-- lower pollution → higher `clean_air_score`  
-- closer to preferred temperature → higher `weather_score`
+- lower cost-of-living → higher cost score (inverted scale)
+- lower pollution → higher clean-air score (inverted scale)
+- closer to preferred temperature → higher weather score (distance-to-target transformed to 0–1)
+- higher purchasing power or QoL → higher score (direct scale)
+
+The result is a set of comparable sub-scores per country, each interpretable on a 0–1 scale.
                 """
             )
 
-        with st.expander("Weighting (0–100, normalized to sum = 100)", expanded=False):
+        with st.expander("Step E — Weighting and aggregation", expanded=False):
             st.markdown(
                 """
-Weights come from persona defaults + swipe adjustments.  
-Weights are normalized so they always sum to **100**.
+Weights represent “importance budgets” over categories:
+
+- Persona selection provides a sensible default weight profile.
+- Swipe interactions refine weights and can also update user targets (e.g., preferred climate range).
+- Weights are represented as 0–100 values and normalized so they always sum to 100.
+
+Final aggregation:
+- `final_score_raw` is computed as a weighted sum of sub-scores.
+- The final score is kept comparable (not artificially rescaled to force #1 to 100%).
+- Countries are ranked by this score and displayed as Top Matches.
                 """
             )
 
-        with st.expander("Final Score (no forced 100% top rank)", expanded=False):
+        with st.expander("Step F — Explanations (“Peek behind the score”)", expanded=False):
             st.markdown(
                 """
-`final_score_raw` is computed as a weighted sum of category scores.  
-The final score is clipped into **0–1** — Pathfind does **not** rescale scores to force the #1 destination to become “100%”.
+Pathfind creates user-facing explanations by keeping intermediate quantities explicit:
+
+- Sub-scores remain accessible (e.g., cost score, clean-air score, climate score, safety-related scores).
+- Each sub-score is multiplied by its current weight to form a contribution.
+- Explanations summarize the top positive and negative contributions so users can see what drives ranking.
+
+This is intentionally not a black-box model: the scoring pipeline is designed to be inspectable and debuggable.
                 """
             )
 
-        with st.expander("🎲 Controlled randomness (seeds)", expanded=False):
+        with st.expander("Controlled randomness (stability within a run)", expanded=False):
             st.markdown(
                 """
-Pathfind uses controlled randomness to diversify close outcomes:
-- `hidden_gem_score`: combines “low UNESCO” with stable noise based on `gem_seed`
-- swipe card selection: randomized but stable within run using `jitter_seed`
-- `jitter_score`: small stable noise to break ties, based on `jitter_seed`
+Pathfind uses controlled randomness to diversify close outcomes and break ties.
 
-New seeds are generated at the start of each new run (after Step 1).  
-Pressing “Start Over” clears the session state entirely, ensuring a fresh run.
+- Randomized elements remain stable within a run so behavior is reproducible when debugging.
+- A new run refreshes randomized components for variety.
+
+This avoids the situation where tiny floating-point differences or ties make rankings feel repetitive, while still keeping the system understandable.
                 """
             )
 
     # ------------------------------------------------------------
-    # COST ESTIMATOR
+    # MODULES (merged)
     # ------------------------------------------------------------
     with tabs[4]:
-        _section_title("💸 Cost Estimator (Numbeo-driven trip budgeting)")
+        _section_title("Modules", "Core components in the dashboard")
 
         st.markdown(
             """
-Pathfind includes a **Cost Estimator** module that translates country-level price data into a practical trip budget estimate.
-
-It uses Numbeo item prices and scales them to:
-- trip length (days / weeks),
-- group size (adults / kids),
-- item frequency (per day / week / month),
-- optional currency conversion (based on origin).
+Pathfind is implemented as a modular set of mini-apps inside one unified dashboard.
+The core ranking is database-driven (fast and repeatable), while several modules add live functionality through APIs.
             """
         )
+
+        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
 
         a, b = st.columns([1, 1])
         with a:
             _mini_card(
-                "What it outputs",
+                "Cost Estimator (budget planning)",
                 _html_list(
                     [
-                        "Estimated totals across cost categories",
-                        "Item-level breakdown with transparent assumptions",
-                        "Scaled results by trip duration and group size",
+                        "Uses item-level prices and indices to translate “cost of living” into a planning budget.",
+                        "Builds a transparent breakdown (e.g., food, transport, everyday items) rather than one opaque number.",
+                        "Scales by trip duration and group size; can incorporate exchange-rate snapshots when available.",
+                        "Designed for planning and comparison — real costs vary by location, season, and travel style.",
                     ]
                 ),
-                icon="🧾",
             )
         with b:
             _mini_card(
-                "Interpretation",
+                "Flight Search (two-stage: DB → live)",
                 _html_list(
                     [
-                        "Uses averages; real costs vary by region and season",
-                        "Travel style and accommodation dominate real budgets",
+                        "Stage 1: fast flight context from database-backed flight-cost samples via airport mappings.",
+                        "Stage 2: optional live flight search via Amadeus when the user proceeds (dates, passengers, origin/destination airports).",
+                        "Returns itineraries (carriers, layovers, times, prices) based on provider availability.",
+                        "Live prices can change rapidly; the dashboard treats this as a live signal, not a guarantee.",
                     ]
                 ),
-                icon="🔍",
             )
 
-        st.info("Cost estimates are planning guidance (not a guarantee).")
+        a, b = st.columns([1, 1])
+        with a:
+            _mini_card(
+                "Trip Planner (itinerary + routing support)",
+                _html_list(
+                    [
+                        "Supports planning for a selected destination: itinerary structure, POI display, and route-building logic.",
+                        "Interactive: users can adjust constraints (time, radius, interests, budget) and see planning outputs update.",
+                        "Routing and map enrichment can be powered by Google Maps depending on your configuration.",
+                        "Search enrichment for POIs can be powered by Serper to complement database content.",
+                    ]
+                ),
+            )
+        with b:
+            _mini_card(
+                "Chatbot interaction (Q&A and planning support)",
+                _html_list(
+                    [
+                        "Natural-language interface for questions about destinations, safety context, budgets, and planning.",
+                        "Can generate itinerary ideas under constraints (e.g., “2 days, low budget, nature + cafés”).",
+                        "Can explain rankings (“why is X high?”) by referencing sub-scores and weights.",
+                        "Human-in-the-loop: the user controls preferences; the assistant supports exploration and explanation.",
+                    ]
+                ),
+            )
+
+        st.markdown(
+            """
+Export and reporting features (e.g., PDF summaries) can be enabled in the main dashboard to support planning and sharing.
+            """
+        )
 
     # ------------------------------------------------------------
-    # FLIGHT SEARCH
+    # WHAT MAKES PATHFIND SPECIAL (includes limitations now)
     # ------------------------------------------------------------
     with tabs[5]:
-        _section_title("✈️ Flight Search (Estimates + optional live search flow)")
+        _section_title("What makes Pathfind special", "Design choices, performance, and limitations")
 
-        st.markdown(
-            """
-Pathfind supports flights on two levels:
-1) **Fast DB-based flight estimates** (quick context in rankings)  
-2) **Optional live flight search flow** (Amadeus) once users shortlist destinations
-            """
-        )
-
-        a, b = st.columns([1, 1])
-        with a:
+        row1a, row1b = st.columns([1, 1])
+        with row1a:
             _mini_card(
-                "Level 1 — Flight Estimates (Database)",
+                "Modular mini-app architecture",
                 _html_list(
                     [
-                        "Uses `flight_costs` joined via major airports per country",
-                        "Provides a fast reference signal (available offline)",
-                        "Shown in results as a rough context for affordability",
+                        "Features are implemented as separate modules and orchestrated in the main dashboard",
+                        "Improves maintainability, testability, and parallel team development",
+                        "Enables isolated debugging of individual components",
                     ]
                 ),
-                icon="⚡",
             )
-        with b:
+        with row1b:
             _mini_card(
-                "Level 2 — Live Flight Search (Amadeus)",
+                "Performance-aware design",
                 _html_list(
                     [
-                        "Triggered in booking steps once user proceeds",
-                        "Uses origin, destination airport mapping, travel dates",
-                        "Returns itineraries with carrier, layovers, timing, and price",
+                        "Unified SQLite database as single source of truth for most signals",
+                        "Two-stage design: DB-backed estimates first, optional live APIs second",
+                        "Avoids unnecessary API calls and keeps the dashboard responsive",
                     ]
                 ),
-                icon="🛰️",
             )
 
-        st.warning("Flight prices and availability can change quickly and may differ from estimates.")
-
-    # ------------------------------------------------------------
-    # PATH FINDER / ROUTE PLANNER
-    # ------------------------------------------------------------
-    with tabs[6]:
-        _section_title("🗺️ Path Finder (Route Planner / Trip Planner)")
-
-        st.markdown(
-            """
-Pathfind includes a route & trip planning component for the selected destination.  
-It is designed to support exploration and itinerary-building inside the dashboard (not to replace a full navigation app).
-            """
-        )
-
-        a, b = st.columns([1, 1])
-        with a:
+        row2a, row2b = st.columns([1, 1])
+        with row2a:
             _mini_card(
-                "What it does",
+                "Debug-friendly & reproducible",
                 _html_list(
                     [
-                        "Visualizes relevant locations (POIs) on a map",
-                        "Supports simple itinerary building / ordering logic",
-                        "Helps structure a trip around user interests",
+                        "Intermediate sub-scores make behavior transparent",
+                        "Within-run stability supports reproducibility during debugging",
+                        "Issues can be reproduced systematically when a configuration is known",
                     ]
                 ),
-                icon="🧭",
             )
-        with b:
+        with row2b:
             _mini_card(
-                "How it works (typical)",
+                "Hybrid live system",
                 _html_list(
                     [
-                        "Map rendering with Folium + streamlit-folium",
-                        "Geo utilities with geopy / geonamescache / pycountry",
-                        "Optional: Google Maps API for routing and map enrichment",
-                        "Optional: Serper for search-based POI enrichment",
-                        "Optional: polyline for route geometry visualization",
+                        "Live modules rely on API calls (flights, routing, chat interaction)",
+                        "Database stores curated data and regularly updated snapshots (e.g., advisories)",
+                        "Clear separation between fast offline-capable signals and live services",
                     ]
                 ),
-                icon="🧩",
             )
 
-        st.info("Routing is approximate depending on enabled providers and available data.")
-
-    # ------------------------------------------------------------
-    # EXPORT / PDF
-    # ------------------------------------------------------------
-    with tabs[7]:
-        _section_title("🧾 Export / PDF")
-
-        st.markdown(
-            """
-Pathfind can export key results for offline use (planning, sharing, printing).  
-Typical export content includes:
-- top matches + match scores,
-- category breakdown (“Peek behind the score”),
-- selected country dashboard highlights,
-- flight context,
-- trip planner output,
-- cost estimator breakdown.
-            """
-        )
-
-        st.warning("Exports never include API keys or secret credentials.")
-
-    # ------------------------------------------------------------
-    # APIs & Security
-    # ------------------------------------------------------------
-    with tabs[8]:
-        _section_title("🔐 APIs, Environment Variables & Security")
-
-        st.markdown(
-            """
-Pathfind integrates multiple external services:
-- **Numbeo API** — indices + item prices for scoring and the cost estimator  
-- **Tugo** — travel advisory data (safety / health / entry guidance)  
-- **UNESCO** — world heritage site data (counts + examples)  
-- **Amadeus API** — flight search and itinerary/price signals  
-- **Google APIs** — calendar export (OAuth) and optional maps/routing support  
-- **Serper API** — optional search enrichment for route planning  
-- **OpenAI API** — optional LLM-based country explanations  
-- **Roxy Tarot API** — optional tarot card draw  
-
-All credentials are loaded via `.env` environment variables and should never be committed to a public repository.
-            """
-        )
-
-        st.markdown("### .env.example (template — no secrets)")
-        env_example = """AMADEUS_API_KEY=
-AMADEUS_API_SECRET=
-OPENAI_API_KEY=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_MAPS_API_KEY=
-SERPER_API_KEY=
-ROXY_API_KEY=
-NUMBEO_API_KEY=
-"""
-        st.code(env_example, language="bash")
-        st.caption("Copy this into a `.env` file locally and fill in your keys. Never commit `.env`.")
-
-        st.markdown("### Recommended repository setup")
-        st.code(
-            """# .gitignore
-.env
-__pycache__/
-*.pyc
-""",
-            language="bash",
-        )
-
-    # ------------------------------------------------------------
-    # REQUIREMENTS
-    # ------------------------------------------------------------
-    with tabs[9]:
-        _section_title("🧰 Requirements (Python packages)")
-
-        st.markdown(
-            """
-These packages are required to run **Pathfind**.  
-They are typically stored in `requirements.txt` and installed via `pip install -r requirements.txt`.
-            """
-        )
-
-        core = [
-            "streamlit==1.52.2",
-            "pandas==2.3.3",
-            "python-dotenv==1.2.1",
-        ]
-        apis = [
-            "openai==2.15.0",
-            "requests==2.32.5",
-            "google-api-python-client==2.187.0",
-            "google-auth-oauthlib==1.2.3",
-        ]
-        geo = [
-            "folium==0.20.0",
-            "streamlit-folium==0.26.1",
-            "geopy==2.4.1",
-            "geonamescache==3.0.0",
-            "polyline==2.0.4",
-            "pycountry==24.6.1",
-        ]
-        export = [
-            "reportlab==4.4.9",
-        ]
-        optional = [
-            "protobuf==3.20.3",
-        ]
-
-        _req_block("Core", core)
-        _req_block("APIs", apis)
-        _req_block("Geo / Travel", geo)
-        _req_block("Export", export)
-        _req_block("Optional", optional)
-
-    # ------------------------------------------------------------
-    # PRIVACY / LIMITATIONS
-    # ------------------------------------------------------------
-    with tabs[10]:
-        _section_title("🛡️ Privacy & Limitations")
-
-        st.markdown(
-            """
-- Pathfind does **not** permanently store personal data.  
-- User preferences exist only in **Streamlit session state**.  
-- Safety and equality indicators provide data-based guidance only and cannot guarantee individual outcomes.  
-- Flight prices are estimates or availability-dependent API results and may differ from market prices.  
-            """
-        )
-
-        st.markdown("### Practical limitations (examples)")
-        st.markdown(
-            """
-- Country-level averages hide regional differences (city vs countryside).  
-- Cost estimates depend heavily on travel style and accommodation choices.  
-- Advisories and equality indicators can change over time.  
-            """
-        )
-
-    # ------------------------------------------------------------
-    # IMPRESSUM
-    # ------------------------------------------------------------
-    with tabs[11]:
-        _section_title("🏛️ Impressum / Project Context")
-
-        st.markdown(
-            """
-This dashboard was developed as part of a **university group project**.  
-It is intended for **research, learning, and demonstration purposes**.
-            """
-        )
-
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        _mini_card(
-            "Project metadata",
-            _html_list(
-                [
-                    "Project: <b>Pathfind</b>",
-                    "Type: University Group Project",
-                    f"Last rendered: <b>{today}</b>",
-                ]
-            ),
-            icon="📚",
-        )
+        row3a, row3b = st.columns([1, 1])
+        with row3a:
+            _mini_card(
+                "Explainability first",
+                _html_list(
+                    [
+                        "No black-box recommendation model",
+                        "Users can inspect why a destination ranks high or low",
+                        "Score explanations connect preferences to outcomes",
+                    ]
+                ),
+            )
+        with row3b:
+            _mini_card(
+                "Beyond typical travel planners",
+                _html_list(
+                    [
+                        "Not centered solely around booking conversion",
+                        "Integrates contextual indicators (entry, safety, equality, heritage, climate, affordability)",
+                        "Designed for exploration, transparency, and research-oriented comparison",
+                    ]
+                ),
+            )
 
         st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-        st.caption("If deployed publicly, consider adding contact details and a short legal disclaimer depending on requirements.")
+
+        _mini_card(
+            "Limitations (important)",
+            _html_list(
+                [
+                    "<b>Aggregation:</b> many inputs are country-level averages and may hide city-level variation",
+                    "<b>Temporal validity:</b> prices, advisories, and indices can change over time",
+                    "<b>External dependency:</b> live features depend on availability and limits of external APIs",
+                    "<b>Routing:</b> planning tools are support tools and not full traffic-aware navigation engines",
+                    "<b>Interpretation:</b> safety and equality indicators are guidance signals, not guarantees of personal experience",
+                ]
+            ),
+        )
+
+    # ------------------------------------------------------------
+    # IMPRESSUM (now includes privacy notice + github link)
+    # ------------------------------------------------------------
+    with tabs[6]:
+        _section_title("Impressum", "Project context, contributors, and privacy notice")
+
+        st.markdown(
+            """
+This dashboard was developed as part of a university group project.
+
+**Professor:** Marc Ratkovic  
+**Chair:** Chair of Social Data Science  
+**Module:** Seminar and Lab Machine Learning  
+            """
+        )
+
+        _mini_card(
+            "Producers",
+            _html_list(
+                [
+                    "Fritz Bumb",
+                    "Clara Oppenländer",
+                    "Luis Nepomuk Götze",
+                    "Thomas Petrausch",
+                ]
+            ),
+        )
+
+        _mini_card(
+            "Repository",
+            "GitHub: https://github.com/clara-opp/pathfind",
+        )
+
+        _mini_card(
+            "Privacy notice / data protection",
+            _html_list(
+                [
+                    "Pathfind does not permanently store personal user data.",
+                    "User inputs and preferences are handled within the Streamlit session context.",
+                    "API keys are never shown in the UI and should be provided via environment variables during development/deployment.",
+                    "This dashboard is intended for research, learning, and demonstration purposes.",
+                ]
+            ),
+        )
+
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        st.caption(f"Last rendered: {today}")
 
 
 # Optional: allow quick standalone testing
