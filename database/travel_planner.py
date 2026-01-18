@@ -17,7 +17,7 @@ from modules.flight_search import (
 from modules.country_overview import render_country_overview
 from modules.persona_selector import render_persona_step
 from modules.trip_planner import show_trip_planner
-from modules.pathfind_design import setup_complete_design, render_pathfind_header
+from modules.pathfind_design_light import setup_complete_design, render_pathfind_header
 
 
 # ============================================================
@@ -25,6 +25,8 @@ from modules.pathfind_design import setup_complete_design, render_pathfind_heade
 # ============================================================
 load_dotenv()
 st.set_page_config(page_title="Pathfind - your personal travel planner", page_icon="✈️", layout="wide")
+setup_complete_design()
+render_pathfind_header()
 
 
 AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY")
@@ -1583,8 +1585,6 @@ def run_app():
         google_client_secret=GOOGLE_CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
     )
-    st.markdown('<div class="main-header">PATHFIND</div>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Your Next Adventure Awaits</p>', unsafe_allow_html=True)
 
 
     step = st.session_state.step

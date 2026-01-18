@@ -60,21 +60,24 @@ def setup_complete_design() -> None:
         background-attachment: fixed;
     }}
 
-    /* Text - Dark Blue (ICON SAFE: no global span/label styling) */
-    p, li {{
-        color: rgba(20, 40, 80, 0.95) !important;
-        font-family: 'Poppins', sans-serif !important;
+    /* Buttons - Light hover state */
+    button {{
+        background-color: rgba(240, 248, 255, 1) !important;
+        color: rgba(20, 40, 80, 1) !important;
+        border: 1px solid rgba(100, 180, 255, 0.3) !important;
+        transition: all 0.3s ease !important;
     }}
 
-    h1, h2, h3, h4, h5, h6 {{
-        color: rgba(15, 35, 75, 1) !important;
-        font-weight: 600 !important;
-        font-family: 'Poppins', sans-serif !important;
+    button:hover {{
+        background-color: rgba(100, 180, 255, 0.15) !important;
+        color: rgba(20, 40, 80, 1) !important;
+        border-color: rgba(100, 180, 255, 0.6) !important;
+        box-shadow: 0 4px 12px rgba(100, 180, 255, 0.2) !important;
     }}
 
-    a {{
-        color: rgba(0, 80, 180, 1) !important;
-        font-weight: 600 !important;
+    button:active {{
+        background-color: rgba(100, 180, 255, 0.3) !important;
+        color: rgba(20, 40, 80, 1) !important;
     }}
 
     /* Logo Header */
