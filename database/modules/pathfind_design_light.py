@@ -89,7 +89,7 @@ def setup_complete_design() -> None:
 
     .pathfind-logo {{
         font-family: 'Audiowide', sans-serif;
-        font-size: 4.2rem;
+        font-size: 2.2rem;
         font-weight: 900;
         letter-spacing: 5px;
         margin: 0;
@@ -132,7 +132,7 @@ def setup_complete_design() -> None:
     }}
 
     .pathfind-icon {{
-        font-size: 3.2rem;
+        font-size: 2.2rem;
         display: inline-block;
         margin-right: 0.8rem;
         animation: float-plane 3s ease-in-out infinite;
