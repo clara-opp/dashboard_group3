@@ -587,9 +587,56 @@ def render_cost_estimator(
 
     set_accommodation_proxy_by_people(adults=adults, kids=kids)
 
-    st.markdown("#### 🎛️ Category dials")
-    st.caption("Reference amounts describe a typical traveller. Spending levels scale these assumptions to produce the final amounts used for cost calculation.")
+    st.markdown("#### 🧾 Summary")
+    total_local = sum(cat_local.values()) if "cat_local" in locals() and cat_local else 0.0
+    total_eur = None
 
+    price_col = SCENARIO_TO_PRICE_COL.get(st.session_state.get(k("cost_scenario"), "Average"), "average_price")
+
+    detailed, cat_local, cat_eur, local_currency = compute_costs(
+        prices_df=prices_df,
+        plan_df=st.session_state[k("plan_df")],
+        exchange_df=exchange_df,
+        price_col=price_col,
+        days=days,
+        adults=adults,
+        kids=kids,
+        category_dials=st.session_state[k("category_dials")],
+    )
+
+    symbol_local = f"{local_currency} " if local_currency else ""
+    symbol_eur = "€ "
+    rate = get_rate_eur_to_currency(exchange_df, local_currency) if local_currency else None
+
+    missing_categories = [cat for cat in CATEGORY_ORDER if not category_has_any_price_data(detailed, cat)]
+
+    total_local = sum(cat_local.values()) if cat_local else 0.0
+    total_eur = sum(cat_eur.values()) if cat_eur else (total_local / rate if rate else None)
+
+    l, m, r = st.columns([1.1, 1.1, 1.8])
+    with l:
+        st.metric("Total (local)", money(total_local, symbol_local))
+        st.caption(f"Currency: **{local_currency or 'Unknown'}**")
+    with m:
+        st.metric("Total (EUR)", money(total_eur, symbol_eur) if total_eur is not None else "—")
+        if rate:
+            st.caption(f"1 EUR = {rate:.4f} {local_currency}")
+        else:
+            st.caption("No exchange rate found for this currency.")
+    with r:
+        persons = max(adults + kids, 1)
+        per_person_day_local = (total_local / max(days, 1)) / persons
+        st.write("**Sanity checks**")
+        st.write(f"Per person per day (local): **{money(per_person_day_local, symbol_local)}**")
+        if rate:
+            st.write(f"Per person per day (EUR): **{money(per_person_day_local / rate, symbol_eur)}**")
+        if missing_categories:
+            st.warning(
+                "Some categories are excluded because Numbeo price data is missing for this country: "
+                + ", ".join(missing_categories)
+            )
+
+    st.markdown("#### 🧩 Category breakdown")
     cols = st.columns(5)
     for i, cat in enumerate(CATEGORY_ORDER):
         with cols[i]:
@@ -662,57 +709,9 @@ def render_cost_estimator(
 
         st.session_state[k("plan_df")] = plan_df
 
-    price_col = SCENARIO_TO_PRICE_COL.get(st.session_state.get(k("cost_scenario"), "Average"), "average_price")
-
-    detailed, cat_local, cat_eur, local_currency = compute_costs(
-        prices_df=prices_df,
-        plan_df=st.session_state[k("plan_df")],
-        exchange_df=exchange_df,
-        price_col=price_col,
-        days=days,
-        adults=adults,
-        kids=kids,
-        category_dials=st.session_state[k("category_dials")],
-    )
-
-    symbol_local = f"{local_currency} " if local_currency else ""
-    symbol_eur = "€ "
-    rate = get_rate_eur_to_currency(exchange_df, local_currency) if local_currency else None
-
-    missing_categories = [cat for cat in CATEGORY_ORDER if not category_has_any_price_data(detailed, cat)]
-
-    st.markdown("#### 🧾 Summary")
-    total_local = sum(cat_local.values()) if cat_local else 0.0
-    total_eur = sum(cat_eur.values()) if cat_eur else (total_local / rate if rate else None)
-
-    l, m, r = st.columns([1.1, 1.1, 1.8])
-    with l:
-        st.metric("Total (local)", money(total_local, symbol_local))
-        st.caption(f"Currency: **{local_currency or 'Unknown'}**")
-    with m:
-        st.metric("Total (EUR)", money(total_eur, symbol_eur) if total_eur is not None else "—")
-        if rate:
-            st.caption(f"1 EUR = {rate:.4f} {local_currency}")
-        else:
-            st.caption("No exchange rate found for this currency.")
-    with r:
-        persons = max(adults + kids, 1)
-        per_person_day_local = (total_local / max(days, 1)) / persons
-        st.write("**Sanity checks**")
-        st.write(f"Per person per day (local): **{money(per_person_day_local, symbol_local)}**")
-        if rate:
-            st.write(f"Per person per day (EUR): **{money(per_person_day_local / rate, symbol_eur)}**")
-        if missing_categories:
-            st.warning(
-                "Some categories are excluded because Numbeo price data is missing for this country: "
-                + ", ".join(missing_categories)
-            )
-
-    st.markdown("#### 🧩 Category Breakdown")
     cards = st.columns(5)
     for i, cat in enumerate(CATEGORY_ORDER):
         with cards[i]:
-            st.markdown(f"**{cat}**")
             if not category_has_any_price_data(detailed, cat):
                 st.write("No data available")
                 st.write("—")

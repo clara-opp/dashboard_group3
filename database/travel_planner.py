@@ -17,30 +17,9 @@ from modules.flight_search import (
 from modules.country_overview import render_country_overview
 from modules.persona_selector import render_persona_step
 from modules.trip_planner import show_trip_planner
-from modules.pathfind_design_light import setup_complete_design, render_pathfind_header
+from modules.pathfind_design_light import setup_complete_design, render_pathfind_header, render_footer
 from modules.auth_login_page import require_login, render_logout_button
 from modules.about_page import render_about_page
-
-
-# ============================================================
-# ABOUT PAGE 
-# ============================================================
-
-if "show_about" not in st.session_state:
-    st.session_state["show_about"] = False
-
-about_col_left, about_col_right = st.columns([12, 2])
-with about_col_right:
-    if st.button("About", use_container_width=True):
-        st.session_state["show_about"] = True
-        st.rerun()
-
-if st.session_state["show_about"]:
-    render_about_page()
-    if st.button("Back to dashboard", use_container_width=True):
-        st.session_state["show_about"] = False
-        st.rerun()
-    st.stop()
 
 
 # ============================================================
@@ -48,8 +27,6 @@ if st.session_state["show_about"]:
 # ============================================================
 load_dotenv()
 st.set_page_config(page_title="Pathfind - your personal travel planner", page_icon="✈️", layout="wide")
-setup_complete_design()
-render_pathfind_header()
 
 
 AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY")
@@ -117,38 +94,6 @@ st.markdown(
             padding: 0 !important;
             background: none !important;
             border: none !important;
-        }
-
-        .stButton > button {
-            width: 100%;
-            border-radius: 14px;
-            height: 220px !important;
-            font-size: 3rem !important;
-            font-weight: 600;
-            border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            white-space: pre-line !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 20px !important;
-            background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%) !important;
-            border: 2px solid #e0e5ed !important;
-        }
-
-        div[data-testid="stButton"] > button {
-            background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%) !important;
-            color: #333;
-        }
-
-        div[data-testid="stButton"] > button:hover {
-            background: linear-gradient(135deg, #1a237e 0%, #283593 100%) !important;
-            color: white !important;
-            border-color: #1a237e !important;
-            box-shadow: 0 8px 24px rgba(26, 35, 126, 0.25) !important;
-            transform: translateY(-4px) !important;
         }
 
         @media (max-width: 768px) {
@@ -638,8 +583,10 @@ class TravelMatcher:
         df = self.df.copy()
         weights_100 = normalize_weights_100(weights_100)
         weights = weights_to_unit(weights_100)
-
+        
         def tugo_to_score(x):
+            if pd.isna(x):
+                return 0.5
             s = str(x)
             if "Do not travel" in s:
                 return 0.1
@@ -653,8 +600,13 @@ class TravelMatcher:
         df["culture_score"] = self.normalize(unesco)
 
         target_temp = float(prefs.get("target_temp", 25))
-        temp = pd.to_numeric(df.get("climate_avg_temp_c"), errors="coerce").fillna(target_temp)
-        df["weather_score"] = 1 - self.normalize((temp - target_temp).abs())
+        temp_raw = pd.to_numeric(df.get("climate_avg_temp_c"), errors="coerce")
+        miss_temp = temp_raw.isna()
+        temp_filled = temp_raw.fillna(target_temp)
+        weather_score = 1 - self.normalize((temp_filled - target_temp).abs())
+        weather_score = pd.to_numeric(weather_score, errors="coerce").fillna(0.5)
+        weather_score.loc[miss_temp] = 0.5
+        df["weather_score"] = weather_score
 
         col = pd.to_numeric(df.get("numbeo_cost_of_living_index"), errors="coerce")
         rest = pd.to_numeric(df.get("numbeo_restaurant_price_index"), errors="coerce")
@@ -691,7 +643,11 @@ class TravelMatcher:
         gem_seed = int(prefs.get("gem_seed", 1337))
         low_unesco_score = 1 - self.normalize(unesco)
         noise_score = df["country_name"].apply(lambda c: self._stable_noise(str(c), gem_seed))
-        df["hidden_gem_score"] = 0.70 * low_unesco_score + 0.30 * noise_score
+
+        df["hidden_gem_score"] = (
+            0.80 * (low_unesco_score ** 2.0) +
+            0.20 * noise_score
+        )
 
         # Tarot countries boost (+20%)
         tarot_countries = st.session_state.get("tarot_countries", [])
@@ -762,7 +718,7 @@ def init_session_state():
             "qol": 8, "health_care": 4, "clean_air": 6,
             "culture": 10, "weather": 12,
             "luxury_price": 0,
-            "astro": 0, "hidden_gem": 6, "jitter": 6
+            "astro": 0, "hidden_gem": 10, "jitter": 10
         })
     )
 
@@ -827,7 +783,7 @@ def show_basic_info_step(data_manager):
                 st.rerun()
 
         with c_info:
-            with st.popover("ℹ️", use_container_width=True):
+            with st.popover("ⓘ", use_container_width=True):
                 st.markdown("""
                 **LGBTQ+ Safe Travel**
                 
@@ -932,7 +888,6 @@ def _choose_swipe_cards(mode: str):
 
 def show_swiping_step():
     if not st.session_state.get("swipe_mode_chosen", False):
-        # Automatisch 6 zufällige Karten laden
         st.session_state.active_swipe_cards = _choose_swipe_cards("random")
         st.session_state.card_index = 0
         st.session_state.swipe_mode_chosen = True
@@ -946,10 +901,29 @@ def show_swiping_step():
         return
 
     idx = st.session_state.card_index
-    st.markdown(f"### Swipe to Refine Your Choices")
+    st.markdown("### Swipe to Refine Your Choices")
     st.progress(min((idx + 1) / len(cards), 1.0))
 
     card = cards[idx]
+
+    SWIPE_STRENGTH = 1.3   # change for different strength level
+
+    def _scale_deltas(deltas: dict, factor: float) -> dict:
+        out = {}
+        for k, v in deltas.items():
+            if k in WEIGHT_KEYS:
+                out[k] = int(round(float(v) * factor))
+            else:
+                out[k] = v
+        return out
+
+    def apply_tradeoff(deltas: dict, prefs_update: dict | None = None):
+        if prefs_update:
+            st.session_state.prefs.update(prefs_update)
+        st.session_state.weights = adjust_weights_points(
+            st.session_state.weights,
+            _scale_deltas(deltas, SWIPE_STRENGTH)
+        )
 
     def post_update():
         st.session_state.weights = normalize_weights_100(st.session_state.weights)
@@ -958,95 +932,74 @@ def show_swiping_step():
 
     st.markdown(f"<div class='swipe-question'>{card['title']}</div>", unsafe_allow_html=True)
     st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="swipe-card-container">', unsafe_allow_html=True)
+
+    TRADEOFFS = {
+        "weather": {
+            "left":  ({"weather": +15, "culture": -7, "cost": -7}, {"target_temp": 28}),
+            "right": ({"weather": +12, "culture": +5, "cost": -7}, {"target_temp": 18}),
+        },
+        "budget": {
+            "left":  ({"luxury_price": +18, "cost": -10, "rent": -6}, None),
+            "right": ({"cost": +18, "luxury_price": -10, "restaurant": -6}, None),
+        },
+        "culture": {
+            "left":  ({"culture": +16, "jitter": -8, "clean_air": -6}, None),
+            "right": ({"clean_air": +16, "culture": -8, "restaurant": -6}, None),
+        },
+        "pace": {
+            "left":  ({"jitter": +14, "safety_tugo": -8, "qol": -6}, None),
+            "right": ({"qol": +14, "jitter": -8, "safety_tugo": +6}, None),
+        },
+        "food": {
+            "left":  ({"restaurant": +15, "groceries": -8, "cost": -5}, {"food_style": "eat_out"}),
+            "right": ({"groceries": +15, "restaurant": -8, "cost": +5}, {"food_style": "cook"}),
+        },
+        "nightlife": {
+            "left":  ({"culture": +12, "restaurant": +8, "safety_tugo": -7}, {"night_style": "party"}),
+            "right": ({"safety_tugo": +12, "clean_air": +8, "restaurant": -7}, {"night_style": "chill"}),
+        },
+        "mobility": {
+            "left":  ({"culture": +12, "cost": -8, "jitter": -6}, {"move_style": "walk"}),
+            "right": ({"cost": +12, "culture": -8, "jitter": +6}, {"move_style": "hop"}),
+        },
+        "hidden_gems": {
+            "left":  ({"hidden_gem": +30, "culture": -10, "safety_tugo": -6}, None),
+            "right": ({"hidden_gem": -25, "culture": +10, "qol": +6}, None),
+        },
+        "air": {
+            "left":  ({"clean_air": +16, "qol": +8, "culture": -8}, None),
+            "right": ({"culture": +10, "restaurant": +8, "clean_air": -8}, None),
+        },
+        "hospital": {
+            "left":  ({"health_care": +16, "safety_tugo": +8, "jitter": -8}, None),
+            "right": ({"health_care": -10, "hidden_gem": +12, "jitter": +6}, None),
+        },
+        "long_stay": {
+            "left":  ({"rent": +16, "groceries": +8, "jitter": -8}, None),
+            "right": ({"jitter": +6, "culture": +12, "rent": -10}, None),
+        },
+    }
 
     c1, c2 = st.columns(2, gap="medium")
 
     with c1:
         if st.button(f"{card['left']['icon']}\n{card['left']['label']}", key=f"left_{idx}", use_container_width=True):
-            if card["id"] == "weather":
-                st.session_state.prefs["target_temp"] = 28
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"weather": +5})
-
-            if card["id"] == "budget":
-                w = st.session_state.weights.copy()
-                w["luxury_price"] = max(int(w.get("luxury_price", 0)), 10)
-                st.session_state.weights = adjust_weights_points(w, {"cost": -5})
-
-            if card["id"] == "culture":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +6})
-
-            if card["id"] == "pace":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"safety_tugo": -3})
-
-            if card["id"] == "food":
-                st.session_state.prefs["food_style"] = "eat_out"
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"restaurant": +6, "groceries": -3})
-
-            if card["id"] == "nightlife":
-                st.session_state.prefs["night_style"] = "party"
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +3, "safety_tugo": -2})
-
-            if card["id"] == "mobility":
-                st.session_state.prefs["move_style"] = "walk"
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +2})
-
-            if card["id"] == "hidden_gems":
-                w = st.session_state.weights.copy()
-                w["hidden_gem"] = max(int(w.get("hidden_gem", 0)), 18)
-                st.session_state.weights = normalize_weights_100(w)
-
-            if card["id"] == "air":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"clean_air": +6, "qol": +2})
-
-            if card["id"] == "hospital":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"health_care": +8, "safety_tugo": +3})
-
-            if card["id"] == "long_stay":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"rent": +8, "groceries": +3})
-
+            spec = TRADEOFFS.get(card["id"], {}).get("left")
+            if spec:
+                deltas, prefs_update = spec
+                apply_tradeoff(deltas, prefs_update)
             post_update()
 
     with c2:
         if st.button(f"{card['right']['icon']}\n{card['right']['label']}", key=f"right_{idx}", use_container_width=True):
-            if card["id"] == "weather":
-                st.session_state.prefs["target_temp"] = 18
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"weather": +3})
-
-            if card["id"] == "budget":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"cost": +6, "luxury_price": -4})
-
-            if card["id"] == "culture":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": -4})
-
-            if card["id"] == "pace":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"safety_tugo": +4})
-
-            if card["id"] == "food":
-                st.session_state.prefs["food_style"] = "cook"
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"groceries": +6, "restaurant": -3, "cost": +2})
-
-            if card["id"] == "nightlife":
-                st.session_state.prefs["night_style"] = "chill"
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"safety_tugo": +2, "clean_air": +2})
-
-            if card["id"] == "mobility":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"cost": +2})
-
-            if card["id"] == "hidden_gems":
-                w = st.session_state.weights.copy()
-                w["hidden_gem"] = 0
-                st.session_state.weights = normalize_weights_100(w)
-
-            if card["id"] == "air":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +2, "restaurant": +2})
-
-            if card["id"] == "hospital":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"health_care": -5, "hidden_gem": +3})
-
-            if card["id"] == "long_stay":
-                st.session_state.weights = adjust_weights_points(st.session_state.weights, {"culture": +3, "jitter": +2})
-
+            spec = TRADEOFFS.get(card["id"], {}).get("right")
+            if spec:
+                deltas, prefs_update = spec
+                apply_tradeoff(deltas, prefs_update)
             post_update()
+    st.markdown('</div>', unsafe_allow_html=True) 
+
 
 def show_astro_step(data_manager):
     st.markdown(
@@ -1515,6 +1468,10 @@ def show_dashboard_step(data_manager):
 # APP ROUTER
 # ============================================================
 def run_app():
+
+    setup_complete_design()
+    render_pathfind_header()
+
     load_heavy_libs_dynamically()
     data_manager = DataManager()
     init_session_state()
@@ -1562,6 +1519,15 @@ def run_app():
             google_client_secret=GOOGLE_CLIENT_SECRET,
             redirect_uri=REDIRECT_URI,
         )
+    elif step == "about":
+        render_about_page()
+        if st.button("← Back", use_container_width=False):
+            # Zurück zum vorherigen step
+            st.session_state.step = st.session_state.get("previous_step", 1)
+            st.rerun()
+        st.stop()
+
+    render_footer()
 
 
 if __name__ == "__main__":
