@@ -181,7 +181,10 @@ Users can explore destinations by dynamically adjusting profiles, sliders, filte
 
 Pathfind is **interactive** because it works like a guided exploration or mini-game: users can select personas, answer swipe questions, tune preferences, and (optionally) interact with chatbot features for questions and planning.
 
-Pathfind is **live** because selected components rely on live API calls (e.g., flight search, routing, interactive planning), and because parts of the underlying database contain regularly updated snapshots of external sources (e.g., travel safety and entry information). The system is therefore a hybrid of curated database signals and live services.
+Pathfind is **live** because selected components rely on live API calls (e.g., flight search, routing, interactive planning, Visa Requirements), and because parts of the underlying database contain regularly updated snapshots of external sources (e.g., travel safety and entry information). The system is therefore a hybrid of curated database signals and live services.
+
+Pathfind can also optionally check **visa requirements** (powered by Travel Buddy) by matching the user’s selected nationality against destination-specific rules.
+This feature integrates visa information directly into the destination overview and planning flow.
             """
         )
 
@@ -199,9 +202,9 @@ Pathfind is **live** because selected components rely on live API calls (e.g., f
                         "Cost Estimator for trip budgeting (item-level prices)",
                         "Flight context and optional live flight search flow",
                         "Trip Planner for itinerary building and routing support",
-                        "Optional calendar export (if enabled)",
-                        "Optional chatbot interaction for Q&A, explanations, and planning (if enabled)",
-                        "Optional export/summary as PDF (if enabled in the main dashboard)",
+                        "Optional calendar export",
+                        "Optional chatbot interaction for Q&A, explanations, and planning",
+                        "Optional export/summary as PDF",
                     ]
                 ),
             )
@@ -234,7 +237,9 @@ A typical user run looks like this:
         with st.expander("Step 1 — Basic Setup (Origin, Dates, Filters)", expanded=True):
             st.markdown(
                 """
-Users select origin and travel dates and can activate optional filters (e.g., safety-related indicators).  
+- Users select origin and travel dates and can activate optional filters (e.g., safety-related indicators).
+- Optionally select nationality for visa requirement checks (Travel Buddy).  
+
 This step initializes a new run (including fresh randomized elements used later in the flow).
                 """
             )
@@ -381,6 +386,8 @@ This provides a stable base for ranking while keeping the underlying entities mo
                     "<b>Serper</b> — search enrichment for POIs / planning",
                     "<b>OpenAI</b> — chatbot interaction and generated explanations",
                     "<b>Roxy</b> — tarot card draw (optional extension)",
+                    "<b>Travel Buddy</b> — visa requirements matched to the user’s nationality",
+
                 ]
             ),
         )
@@ -429,27 +436,27 @@ Before any scoring happens, Pathfind constructs a candidate set of countries:
 - Countries are loaded from the unified database and merged across domains using ISO3 keys.
 - Filters remove countries that should not be considered (e.g., region exclusions or safety-related filters).
 - If multiple rows can exist for a country after joins (due to missingness or duplicates), the dataset is deduplicated to a single ISO3 row.
-- Missing values are handled conservatively (e.g., skip a signal if it is not available, or use a neutral/default behavior depending on the feature).
                 """
             )
+
         with st.expander("Step B — Missing value handling (neutral & conservative)", expanded=False):
             st.markdown(
                 """
-        Pathfind integrates multiple data sources (e.g., cost indices, climate, flights, safety and equality indicators).
-        Because coverage differs across providers, some values can be missing.
+Pathfind integrates multiple data sources (e.g., cost indices, climate, flights, safety and equality indicators).
+Because coverage differs across providers, some values can be missing.
 
-        Missing values are handled conservatively to keep the ranking stable and fair:
+Missing values are handled conservatively to keep the ranking stable and fair:
 
-        - If multiple records exist for a country, the version with the fewest missing values is retained.
-        - For most numeric indices, missing values are replaced with the median across available countries,
-        resulting in a neutral “middle-of-the-pack” contribution.
-        - If an entire feature is unavailable, it is treated as neutral so it does not distort the ranking.
-        - Feature-specific rules apply where necessary (e.g., missing equality data cannot pass the LGBTQ+ filter).
-        - In the UI (e.g., cost estimator or flight info), missing data is explicitly marked rather than guessed.
+- If multiple records exist for a country, the version with the fewest missing values is retained.
+- For most numeric indices, missing values are replaced with the median across available countries, resulting in a neutral “middle-of-the-pack” contribution.
+- If an entire feature is unavailable, it is treated as neutral so it does not distort the ranking.
+- Feature-specific rules apply where necessary (e.g., missing equality data cannot pass the LGBTQ+ filter).
+- In the UI (e.g., cost estimator or flight information), missing data is explicitly marked rather than guessed.
 
-        This strategy avoids automatically penalizing destinations simply because some data is unavailable.
+This strategy avoids automatically penalizing destinations simply because some data is unavailable.
                 """
             )
+        
         with st.expander("Step C — Outlier handling (winsorization)", expanded=False):
             st.markdown(
                 """
@@ -489,6 +496,10 @@ Weights represent “importance budgets” over categories:
 - Persona selection provides a sensible default weight profile.
 - Swipe interactions refine weights and can also update user targets (e.g., preferred climate range).
 - Weights are represented as 0–100 values and normalized so they always sum to 100.
+
+**Swipe decisions are modeled as explicit trade-offs.**  
+Increasing the importance of one dimension intentionally reduces the influence of others.
+This ensures that preferences meaningfully reshape the ranking instead of uniformly increasing all scores.
 
 Final aggregation:
 - `final_score_raw` is computed as a weighted sum of sub-scores.
@@ -573,6 +584,7 @@ The core ranking is database-driven (fast and repeatable), while several modules
                         "Interactive: users can adjust constraints (time, radius, interests, budget) and see planning outputs update.",
                         "Routing and map enrichment can be powered by Google Maps depending on your configuration.",
                         "Search enrichment for POIs can be powered by Serper to complement database content.",
+                        "Optional visa requirement checks via Travel Buddy API (nationality → destination matching).",
                     ]
                 ),
             )
@@ -596,7 +608,7 @@ Export and reporting features (e.g., PDF summaries) can be enabled in the main d
         )
 
     # ------------------------------------------------------------
-    # WHAT MAKES PATHFIND SPECIAL (includes limitations now)
+    # WHAT MAKES PATHFIND SPECIAL 
     # ------------------------------------------------------------
     with tabs[5]:
         _section_title("What makes Pathfind special", "Design choices, performance, and limitations")
