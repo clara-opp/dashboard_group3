@@ -9,7 +9,7 @@ import streamlit as st
 import base64
 import os
 from pathlib import Path
-
+import random
 
 
 
@@ -344,9 +344,9 @@ def get_travel_profiles():
             }
         },
         {
-            "internal_key": "Clean Air & Calm",
-            "display_name": "Clean Air & Calm",
-            "img_file": "cleanair.jpg",
+            "internal_key": "Fresh Air Fanatic",
+            "display_name": "Fresh Air Fanatic",
+            "img_file": "cleanair.png",
             "img_url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=450&fit=crop",
             "description": "Wellness-focused traveler prioritizing health, nature, and tranquility.",
             "weights": {
@@ -418,6 +418,17 @@ def render_persona_step(datamanager):
         st.stop()
     
     travel_profiles = get_travel_profiles()
+
+        # --- Shuffle personas once per session ---
+    if "persona_order" not in st.session_state:
+        order = list(range(len(travel_profiles)))
+        random.shuffle(order)
+        st.session_state.persona_order = order
+        st.session_state.profile_index = 0
+        st.session_state.last_profile_idx = -1  # forces slider init for new first persona
+    # Apply order
+    travel_profiles = [travel_profiles[i] for i in st.session_state.persona_order]
+
     total_profiles = len(travel_profiles)
     
     if 'profile_index' not in st.session_state:

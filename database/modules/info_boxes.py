@@ -31,39 +31,78 @@ def get_first_travel_month(data_manager) -> Optional[int]:
 
 def fetch_weather_data(data_manager, country: Dict, month: int) -> Optional[Dict[str, Any]]:
     """
-    Fetch weather data from climate_monthly table
+    Fetch weather data from climate_monthly table using ISO3 code mapping
     """
     try:
         conn = data_manager.get_connection()
         cursor = conn.cursor()
         
+        iso3 = country.get('iso3')
         country_name = country.get('country_name')
         
-        if not country_name:
+        if not iso3 and not country_name:
             return None
         
-        # Query for exact match
-        cursor.execute("""
-            SELECT * FROM climate_monthly 
-            WHERE country_name_climate = ?
-            LIMIT 1
-        """, (country_name,))
+        result = None
+        matched_climate_country = None
         
-        columns = [description[0] for description in cursor.description]
-        result = cursor.fetchone()
-        
-        if not result:
-            # Try fuzzy match
+        # Strategy 1: Use ISO3 to find ALL climate_monthly entries, then pick best match
+        if iso3:
+            # First, get all unique country names from climate_monthly
             cursor.execute("""
-                SELECT * FROM climate_monthly 
+                SELECT DISTINCT country_name_climate 
+                FROM climate_monthly
+            """)
+            
+            climate_countries = [row[0] for row in cursor.fetchall()]
+            
+            # Try to match using the country_name or ISO3 hints
+            for climate_country in climate_countries:
+                # Exact match
+                if climate_country.lower() == country_name.lower():
+                    matched_climate_country = climate_country
+                    break
+                
+                # Partial match (e.g., "Iran" in "Islamic Republic of Iran")
+                if country_name.lower() in climate_country.lower():
+                    matched_climate_country = climate_country
+                    break
+            
+            # If still no match, try reverse (e.g., "Islamic" in country keywords)
+            if not matched_climate_country:
+                for climate_country in climate_countries:
+                    if any(word.lower() in country_name.lower() 
+                           for word in climate_country.split() if len(word) > 3):
+                        matched_climate_country = climate_country
+                        break
+        
+        # Strategy 2: Direct fuzzy match on country_name
+        if not matched_climate_country and country_name:
+            cursor.execute("""
+                SELECT DISTINCT country_name_climate 
+                FROM climate_monthly
                 WHERE country_name_climate LIKE ?
                 LIMIT 1
             """, (f"%{country_name}%",))
+            
+            match = cursor.fetchone()
+            if match:
+                matched_climate_country = match[0]
+        
+        # Now fetch the actual weather data
+        if matched_climate_country:
+            cursor.execute("""
+                SELECT * FROM climate_monthly 
+                WHERE country_name_climate = ?
+                LIMIT 1
+            """, (matched_climate_country,))
+            
             result = cursor.fetchone()
         
         conn.close()
         
         if result:
+            columns = [description[0] for description in cursor.description]
             result_dict = dict(zip(columns, result))
             
             temp_key = f"climate_temp_month_{month}"
@@ -87,7 +126,7 @@ def fetch_weather_data(data_manager, country: Dict, month: int) -> Optional[Dict
         return None
         
     except Exception as e:
-        print(f"Weather fetch error: {e}")
+        print(f"Weather fetch error for {country.get('country_name')} ({country.get('iso3')}): {e}")
         return None
 
 
@@ -121,7 +160,7 @@ def render_weather_box(country: Dict, data_manager) -> None:
     month_name = get_month_name(travel_month)
     
     st.markdown("---")
-    st.markdown(f"### 🌤️ Weather in {month_name}")
+    st.markdown(f"### Weather in {month_name}")
     
     # 4 clean metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -309,3 +348,370 @@ def render_unesco_heritage_box(country, data_manager):
             hide_index=True,
             height=300
         )
+
+def fetch_safety_data(data_manager, country: Dict) -> Optional[Dict[str, Any]]:
+    """
+    Fetch essential safety and health data from tugo detail tables + equality index
+    """
+    try:
+        conn = data_manager.get_connection()
+        cursor = conn.cursor()
+        
+        iso3 = country.get('iso3')
+        iso2 = country.get('iso2')
+        
+        if not iso2 and not iso3:
+            return None
+        
+        # Fetch critical safety categories (Women's safety FIRST, then others)
+        critical_safety = [
+            "Women's safety",
+            "Terrorism",
+            "Crime",
+            "Kidnapping",
+            "Security situation",
+            "2SLGBTQI+ persons",
+            "Demonstrations"
+        ]
+        
+        safety_data = []
+        for category in critical_safety:
+            cursor.execute("""
+                SELECT category, description
+                FROM tugo_safety
+                WHERE iso2 = ? AND category LIKE ?
+                LIMIT 1
+            """, (iso2, f"%{category}%"))
+            result = cursor.fetchone()
+            if result:
+                safety_data.append(result)
+        
+        # Fetch key health info (vaccines, diseases)
+        cursor.execute("""
+            SELECT DISTINCT disease_name
+            FROM tugo_health
+            WHERE iso2 = ?
+            AND disease_name NOT IN ('GENERAL', '')
+            ORDER BY disease_name
+        """, (iso2,))
+        
+        diseases = [row[0] for row in cursor.fetchall()]
+        
+        health_data = []
+        for disease in diseases:
+            cursor.execute("""
+                SELECT disease_name, description
+                FROM tugo_health
+                WHERE iso2 = ? AND disease_name = ?
+                LIMIT 1
+            """, (iso2, disease))
+            result = cursor.fetchone()
+            if result:
+                health_data.append(result)
+        
+        # Fetch equality index data (LGBTQ+ scores)
+        equality_data = None
+        if iso3:
+            cursor.execute("""
+                SELECT 
+                    equality_index_score,
+                    equality_index_legal,
+                    equality_index_public_opinion,
+                    equality_index_rank
+                FROM equality_index
+                WHERE iso3 = ?
+                LIMIT 1
+            """, (iso3,))
+            equality_data = cursor.fetchone()
+        
+        conn.close()
+        
+        if safety_data or health_data or equality_data:
+            return {
+                "safety": safety_data,
+                "health": health_data,
+                "equality": equality_data
+            }
+        
+        return None
+        
+    except Exception as e:
+        print(f"Safety data fetch error for {country.get('country_name')} ({country.get('iso2')}): {e}")
+        return None
+
+    
+
+def clean_lgbtq_text(text: str) -> str:
+    """
+    Standardize LGBTQ+ terminology in text and fix double plusses
+    """
+    if not text:
+        return text
+    
+    import re
+    
+    # Replace various LGBTQ+ abbreviations with standard "LGBTQ+"
+    text = text.replace("2SLGBTQI+", "LGBTQ+")
+    text = text.replace("2SLGBTQI", "LGBTQ+")
+    text = text.replace("LGBT+", "LGBTQ+")
+    text = text.replace("LGBTQ", "LGBTQ+")
+    
+    # Fix double plusses (e.g., "LGBTQ+++")
+    text = re.sub(r'LGBTQ\+{2,}', 'LGBTQ+', text)
+    
+    # Fix any word followed by multiple plusses
+    text = re.sub(r'(\w)\+{2,}', r'\1+', text)
+    
+    return text
+
+
+def format_text(text: str) -> str:
+    """
+    Format text for better readability: add spaces after periods, fix line breaks
+    Remove unnecessary boilerplate text and Canada references
+    """
+    if not text:
+        return text
+    
+    import re
+    
+    # Add space after period if missing (but not for abbreviations like "U.S.")
+    text = re.sub(r'([a-z])\.([A-Z])', r'\1. \2', text)
+    
+    # Add newlines before bullet points or numbered lists for better formatting
+    text = re.sub(r'(\n| )•', r'\n• ', text)
+    text = re.sub(r'(\n| )(?=\d+\.)', r'\n', text)
+    
+    # Fix multiple spaces
+    text = re.sub(r' +', ' ', text)
+    
+    # Remove boilerplate text
+    # Remove "Advice for women travellers" links
+    text = re.sub(r'\s*Advice for women travellers\s*', '', text, flags=re.IGNORECASE)
+    
+    # Remove "Learn more:" sections and links
+    text = re.sub(r'\s*Learn more:.*?(?=\n\n|\Z)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'Learn more.*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove "For more information" sentences
+    text = re.sub(r'[^.!?]*For more information[^.!?]*[.!?]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'[^.!?]*See[^.!?]*[.!?]', '', text, flags=re.IGNORECASE)
+    
+    # Remove sentences containing "Canada" (aber nicht wenn es der einzige Satz ist)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    filtered_sentences = [s for s in sentences if 'Canada' not in s or len(sentences) <= 2]
+    text = ' '.join(filtered_sentences)
+    
+    # Clean up multiple newlines
+    text = re.sub(r'\n\s*\n+', '\n\n', text)
+    
+    # Strip leading/trailing whitespace
+    text = text.strip()
+    
+    # Entferne Text nach dem letzten Punkt (unvollständige Sätze am Ende)
+    # Finde den letzten Punkt, Fragezeichen oder Ausrufezeichen
+    last_punctuation = max(
+        text.rfind('.'),
+        text.rfind('!'),
+        text.rfind('?')
+    )
+    
+    if last_punctuation != -1:
+        # Es gibt Punkte im Text
+        text = text[:last_punctuation + 1]
+        text = text.strip()
+    elif text:
+        # Kein Punkt gefunden - entferne alles (unvollständiger Text)
+        text = ""
+    
+    return text
+
+
+
+
+def get_equality_color_and_emoji(score: float) -> tuple[str, str]:
+    """Return color and emoji based on equality index score (0-100)"""
+    if score is None:
+        return "#e0e0e0", "⚪"
+    
+    score = float(score)
+    if score >= 75:
+        return "#4caf50", "🟢"  # Green - Very Safe
+    elif score >= 50:
+        return "#8bc34a", "🟡"  # Light Green - Moderate
+    elif score >= 25:
+        return "#ff9800", "🟠"  # Orange - Lower
+    else:
+        return "#f44336", "🔴"  # Red - Very Low
+
+
+
+def render_safety_box(country: Dict, data_manager) -> None:
+    """
+    Render essential safety and health information with LGBTQ+ details in dropdown
+    """
+    
+    if not country:
+        st.info("🛡️ No country selected")
+        return
+    
+    safety_data = fetch_safety_data(data_manager, country)
+    if not safety_data:
+        country_name = country.get('country_name', 'Unknown')
+        st.info(f"ℹ️ Safety data not available for {country_name}")
+        return
+    
+    country_name = country.get('country_name', 'Unknown')
+    
+    st.markdown("---")
+    st.markdown("### 🛡️ Safety & Health Essentials")
+    
+    safety_list = safety_data.get("safety", [])
+    health_list = safety_data.get("health", [])
+    equality_data = safety_data.get("equality")
+    
+    # TABS: Safety / Health
+    tab1, tab2 = st.tabs(["⚠️ Safety Alerts", "💊 Health Risks"])
+    
+    with tab1:
+        # Women's safety - expandable
+        for category, description in safety_list:
+            if "Women" in category:
+                with st.expander(f"👩 {category}", expanded=True):
+                    st.write(format_text(description))
+                st.markdown("")
+                break
+        
+        # Other safety alerts (not women, not lgbtq, not driving)
+        for category, description in safety_list:
+            if ("Women" not in category and 
+                "2SLGBTQI+" not in category and 
+                "Driving" not in category):
+                with st.expander(f"⚠️ {category}"):
+                    st.write(format_text(description))
+        
+        # LGBTQ+ safety - as regular expander like others
+        lgbtq_alert = None
+        for category, description in safety_list:
+            if "2SLGBTQI+" in category:
+                lgbtq_alert = (category, description)
+                break
+        
+        if equality_data or lgbtq_alert:
+            with st.expander(f"🏳️‍🌈 LGBTQ+ Safety & Index"):
+                col1, col2 = st.columns([1, 2])
+                
+                # Left: Score boxes
+                with col1:
+                    if equality_data:
+                        overall_score, legal_score, social_score, rank = equality_data
+                        
+                        if overall_score is not None:
+                            color, emoji = get_equality_color_and_emoji(overall_score)
+                            
+                            # Overall score
+                            st.markdown(
+                                f"<div style='background: {color}; padding: 12px; border-radius: 6px; margin-bottom: 8px;'>"
+                                f"<div style='font-size: 12px; color: #666;'>Overall</div>"
+                                f"<div style='font-size: 24px; font-weight: bold;'>{overall_score:.0f}/100</div>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Legal Rights
+                            if legal_score:
+                                legal_color, _ = get_equality_color_and_emoji(legal_score)
+                                st.markdown(
+                                    f"<div style='background: {legal_color}; padding: 8px; border-radius: 6px; margin-bottom: 6px;'>"
+                                    f"<div style='font-size: 10px; color: #666;'>Legal</div>"
+                                    f"<div style='font-size: 16px; font-weight: bold;'>{legal_score:.0f}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
+                            
+                            # Social Acceptance
+                            if social_score:
+                                social_color, _ = get_equality_color_and_emoji(social_score)
+                                st.markdown(
+                                    f"<div style='background: {social_color}; padding: 8px; border-radius: 6px;'>"
+                                    f"<div style='font-size: 10px; color: #666;'>Social</div>"
+                                    f"<div style='font-size: 16px; font-weight: bold;'>{social_score:.0f}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
+                            
+                            if rank:
+                                st.caption(f"🌍 Rank: #{rank}")
+                
+                # Right: Text content
+                with col2:
+                    if lgbtq_alert:
+                        category, description = lgbtq_alert
+                        # Clean up description: replace LGBTQ variations
+                        cleaned_desc = clean_lgbtq_text(description)
+                        st.write(format_text(cleaned_desc))
+                    else:
+                        st.info("No specific LGBTQ+ information available")
+        
+        # Driving information
+        driving_info = None
+        for category, description in safety_list:
+            if "Driving" in category:
+                driving_info = (category, description)
+                break
+        
+        if driving_info:
+            category, description = driving_info
+            with st.expander(f"🚗 {category}"):
+                st.write(format_text(description))
+    
+    with tab2:
+        # Important travel diseases to filter for (COVID-19 removed)
+        important_diseases = [
+            "Malaria",
+            "Dengue",
+            "Zika",
+            "Typhoid",
+            "Hepatitis",
+            "Rabies",
+            "Tuberculosis",
+            "Measles",
+            "Polio",
+            "Cholera"
+        ]
+        
+        if health_list:
+            # Filter and show only important diseases
+            important_found = []
+            other_found = []
+            
+            for disease_name, description in health_list:
+                # Skip COVID-19
+                if "COVID" in disease_name or "covid" in disease_name.lower():
+                    continue
+                
+                is_important = any(
+                    disease.lower() in disease_name.lower() 
+                    for disease in important_diseases
+                )
+                
+                if is_important:
+                    important_found.append((disease_name, description))
+                else:
+                    other_found.append((disease_name, description))
+            
+            # Show important diseases first
+            if important_found:
+                for disease_name, description in important_found:
+                    with st.expander(f"🦟 {disease_name}"):
+                        st.write(format_text(description))
+            
+            # Show other diseases collapsed
+            if other_found:
+                with st.expander("ℹ️ Other Health Information"):
+                    for disease_name, description in other_found:
+                        st.markdown(f"**{disease_name}**")
+                        st.write(format_text(description))
+                        st.markdown("")
+        else:
+            st.info("No specific disease risks identified")
