@@ -383,12 +383,12 @@ This provides a stable base for ranking while keeping the underlying entities mo
                     "<b>Berkeley Earth</b> — climate and weather data inputs",
                     "<b>Amadeus</b> — live flight search and itinerary/price signals<br>&nbsp;&nbsp;• Flight Offers Search API<br>&nbsp;&nbsp;• Flight Offers Price API<br>&nbsp;&nbsp;• Flight Create Orders API",
                     "<b>Google APIs</b> — calendar export (OAuth) + maps/routing support<br>&nbsp;&nbsp;• Google Calendar API<br>&nbsp;&nbsp;• Google Places API<br>&nbsp;&nbsp;• Google Routes API",
-                    "<b>Serper</b> — used by trip planner to search prices",
+                    "<b>Serper API</b> — performs web search to search prices for trip planner",
                     "<b>OpenAI</b> — chatbot interaction and generated explanations",
                     "<b>Roxy</b> — tarot card draw (optional extension)",
                     "<b>Travel Buddy</b> — visa requirements matched to the user’s nationality",
                     "<b>OpenTravelData (Github)</b> — data for airports",
-                    "<b>gettocenter.com</b> — scraped data to sort airports by passenger volume",
+                    "<b>gettocenter.com</b> — scraped to obtain passenger volume of airports",
                     "<b>Unsplash API</b> — images for countries",
                 ]
             ),
@@ -579,16 +579,34 @@ The core ranking is database-driven (fast and repeatable), while several modules
         a, b = st.columns([1, 1])
         with a:
             _mini_card(
-                "Trip Planner (itinerary + routing support)",
-                _html_list(
-                    [
-                        "Supports planning for a selected destination: itinerary structure, POI display, and route-building logic.",
-                        "Interactive: users can adjust constraints (time, radius, interests, budget) and see planning outputs update.",
-                        "Routing and map enrichment can be powered by Google Maps depending on your configuration.",
-                        "Search enrichment for POIs can be powered by Serper to complement database content.",
-                        "Optional visa requirement checks via Travel Buddy API (nationality → destination matching).",
-                    ]
-                ),
+                "Trip Planner",
+                (
+                    "<div style='font-size:0.88rem; border-left: 3px solid #1f6e8a; padding-left: 12px; margin-bottom: 12px;'>"
+                    "<b>1. Initialization (Parallel)</b><br>"
+                    "• <i>Chatbot:</i> Analyzes user prompt to extract intent and constraints.<br>"
+                    "• <i>SQLite:</i> Concurrently retrieves exchange rates and ISO metadata to calibrate the budget engine."
+                    "</div>"
+                    "<div style='font-size:0.88rem; border-left: 3px solid #1f6e8a; padding-left: 12px; margin-bottom: 12px;'>"
+                    "<b>2. Discovery (Chatbot → Places API)</b><br>"
+                    "• <i>Chatbot:</i> Formulates specific search queries based on user interests.<br>"
+                    "• <i>Google Places API:</i> Executes these searches in parallel to find real-world venues."
+                    "</div>"
+                    "<div style='font-size:0.88rem; border-left: 3px solid #1f6e8a; padding-left: 12px; margin-bottom: 12px;'>"
+                    "<b>3. Enrichment (Places → Serper API)</b><br>"
+                    "• <i>System:</i> Feeds discovered venue names into Serper for cost verification.<br>"
+                    "• <i>Serper API:</i> Scrapes real-time entrance fees and menu costs for the chatbot's candidates in parallel."
+                    "</div>"
+                    "<div style='font-size:0.88rem; border-left: 3px solid #1f6e8a; padding-left: 12px; margin-bottom: 12px;'>"
+                    "<b>4. Synthesis (Data → Chatbot → Logic)</b><br>"
+                    "• <i>Chatbot:</i> Synthesizes the final itinerary text using the enriched data.<br>"
+                    "• <i>Logic Engine:</i> Python logic calculates final costs using traveler multipliers and exchange rates and Google Routes optimization to the chatbot's plan."
+                    "</div>"
+                    "<div style='font-size:0.88rem; border-left: 3px solid #1f6e8a; padding-left: 12px;'>"
+                    "<b>5. Visualization & Export</b><br>"
+                    "• <i>Folium:</i> Maps the final itinerary with interactive markers and polylines.<br>"
+                    "• <i>WeasyPrint:</i> Converts the chatbot's conversational output into a structured PDF."
+                    "</div>"
+                )
             )
         with b:
             _mini_card(
@@ -635,6 +653,7 @@ Export and reporting features (e.g., PDF summaries) can be enabled in the main d
                         "Unified SQLite database as single source of truth for most signals",
                         "Two-stage design: DB-backed estimates first, optional live APIs second",
                         "Avoids unnecessary API calls and keeps the dashboard responsive",
+                        "Leverages parallel execution for concurrent API calls and database lookups, significantly reducing latency during complex planning workflows",
                     ]
                 ),
             )

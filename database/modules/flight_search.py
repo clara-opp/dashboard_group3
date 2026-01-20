@@ -437,7 +437,13 @@ def show_booking_step(
     Step 7: Booking form + create order.
     Uses st.session_state.priced_offer and st.session_state.traveler_counts.
     """
-    st.header("Confirm Your Booking")
+    c_title, c_back = st.columns([0.85, 0.15])
+    with c_title:
+        st.header("Confirm Your Booking")
+    with c_back:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.step = 7
+            st.rerun()
 
     offer = st.session_state.priced_offer
     counts = st.session_state.get("traveler_counts", {"ADULT": 1, "CHILD": 0, "HELD_INFANT": 0})
@@ -515,13 +521,7 @@ def show_booking_step(
                                 )
                     else:
                         st.error("Booking failed. The flight may no longer be available or the connection timed out.")
-
-    c_back, _ = st.columns([0.15, 0.85])
-    with c_back:
-        if st.button("← Back", use_container_width=True):
-            st.session_state.step = 7
-            st.rerun()
-
+                        
 
 def show_confirmation_step(
     *,
