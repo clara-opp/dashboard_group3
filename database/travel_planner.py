@@ -773,50 +773,8 @@ def init_session_state():
 # UI STEPS
 # ============================================================
 def show_basic_info_step(data_manager):
-    """Step 1: Origin, LGBTQ filter, and vacation dates"""
-
-    # Origin selection
-    col_content, col_flag_empty = st.columns([0.88, 0.12], vertical_alignment="top")
-
-    with col_content:
-        st.markdown("### Where are you starting from?")
-        origin_country_map = {"Germany": "FRA", "United States": "ATL"}
-        sel_country = st.radio("Select your location", list(origin_country_map.keys()), label_visibility="collapsed", horizontal=True)
-        all_airports = data_manager.get_airports()
-        default_iata = origin_country_map[sel_country]
-        default_idx = all_airports[all_airports['iata_code'] == default_iata].index[0] if default_iata in all_airports['iata_code'].values else 0
-        sel_airport = st.selectbox("Departure airport", options=all_airports["display"], index=int(default_idx))
-        st.session_state["origin_iata"] = sel_airport.split("(")[-1].strip(")")
-
-    with col_flag_empty:
-        c_flag, c_info = st.columns([0.65, 0.35], vertical_alignment="bottom")
-        
-        with c_flag:
-            if "lgbtq_filter_active" not in st.session_state:
-                st.session_state.lgbtq_filter_active = False
-            
-            is_active = st.session_state.lgbtq_filter_active
-            
-            if st.button(
-                f"{'🏳️‍🌈' if is_active else '🏳️'}",
-                key="lgbtq_toggle",
-                help="LGBTQ+ Safe Travel Filter",
-                use_container_width=True
-            ):
-                st.session_state.lgbtq_filter_active = not st.session_state.lgbtq_filter_active
-                st.rerun()
-
-        with c_info:
-            with st.popover("ⓘ", use_container_width=True):
-                st.markdown("""
-                **LGBTQ+ Safe Travel**
-                
-                Filters for countries with stronger legal protections and societal acceptance.
-                
-                *Note: Data-based guidance only. Not a guarantee of individual safety.*
-                """)
-    st.markdown("---")
-
+    """Step 1: Nationality, LGBTQ filter, and vacation dates"""
+    
     st.markdown("### What is your nationality?")
     
     # Direktes Query der Datenbank für alle Länder
@@ -844,15 +802,45 @@ def show_basic_info_step(data_manager):
     if "Germany" in country_names:
         default_idx = country_names.index("Germany")
     
-    selected_nationality_name = st.selectbox(
-        "Select country of nationality",
-        options=country_names,
-        index=default_idx,
-        key="passport_nationality_select",
-        help="This helps us show visa requirements for your destination"
-    )
+    # Nationality + LGBTQ button in einer Reihe
+    col_nationality, col_lgbtq = st.columns([0.88, 0.12], vertical_alignment="bottom")
     
-    # Get ISO codes for selected nationality
+    with col_nationality:
+        selected_nationality_name = st.selectbox(
+            "Select country of nationality",
+            options=country_names,
+            index=default_idx,
+            key="passport_nationality_select",
+            help="This helps us show visa requirements for your destination"
+        )
+    
+    with col_lgbtq:
+        c_flag, c_info = st.columns([0.65, 0.35], vertical_alignment="bottom")
+        with c_flag:
+            if "lgbtq_filter_active" not in st.session_state:
+                st.session_state.lgbtq_filter_active = False
+            
+            is_active = st.session_state.lgbtq_filter_active
+            
+            if st.button(
+                f"{'🏳️‍🌈' if is_active else '🏳️'}",
+                key="lgbtq_toggle",
+                help="LGBTQ+ Safe Travel Filter",
+                use_container_width=True
+            ):
+                st.session_state.lgbtq_filter_active = not st.session_state.lgbtq_filter_active
+                st.rerun()
+        with c_info:
+            with st.popover("ⓘ", use_container_width=True):
+                st.markdown("""
+                **LGBTQ+ Safe Travel**
+                
+                Filters for countries with stronger legal protections and societal acceptance.
+                
+                *Note: Data-based guidance only. Not a guarantee of individual safety.*
+                """)
+    
+    # Get ISO codes for selected nationality and set defaults
     if selected_nationality_name:
         selected_row = countries_df[countries_df["country_name"] == selected_nationality_name]
         if not selected_row.empty:
@@ -861,9 +849,29 @@ def show_basic_info_step(data_manager):
             st.session_state['passport_iso2'] = passport_iso2
             st.session_state['passport_iso3'] = passport_iso3
             st.session_state['nationality_name'] = selected_nationality_name
+            
+            # Set airport and currency based on nationality
+            origin_country_map = {"Germany": ("FRA", "€"), "United States": ("ATL", "$")}
+            
+            if selected_nationality_name in origin_country_map:
+                iata_code, currency = origin_country_map[selected_nationality_name]
+                st.session_state["origin_iata"] = iata_code
+                
+                # Set currency based on nationality
+                if currency == "$":
+                    st.session_state.currency_symbol = "$"
+                    st.session_state.currency_rate = data_manager.get_exchange_rate("USD")
+                else:
+                    st.session_state.currency_symbol = "€"
+                    st.session_state.currency_rate = 1.0
+            else:
+                # Default to Germany/EUR for other countries
+                st.session_state["origin_iata"] = "FRA"
+                st.session_state.currency_symbol = "€"
+                st.session_state.currency_rate = 1.0
     
     st.markdown("---")
-
+    
     # Vacation dates
     st.markdown("### When is your vacation?")
     today = datetime.date.today()
@@ -873,23 +881,17 @@ def show_basic_info_step(data_manager):
         min_value=today,
         help="This helps us find the best flights and weather for your trip.",
     )
-
+    
     # Next button
     if st.button("Next: Choose Your Profile"):
         if not isinstance(vacation_dates, (list, tuple)) or len(vacation_dates) != 2:
             st.error("Please select both a start and end date for your vacation.")
             st.stop()
-
+        
         st.session_state.start_date = vacation_dates[0]
         st.session_state.end_date = vacation_dates[1]
+        
 
-        # Set currency based on origin
-        if st.session_state.origin_iata == "ATL":
-            st.session_state.currency_symbol = "$"
-            st.session_state.currency_rate = data_manager.get_exchange_rate("USD")
-        else:
-            st.session_state.currency_symbol = "€"
-            st.session_state.currency_rate = 1.0
 
         # NEW RUN = NEW SEEDS
         st.session_state.prefs["gem_seed"] = random.randint(1, 10_000_000)
