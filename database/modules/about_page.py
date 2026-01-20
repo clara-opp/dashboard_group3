@@ -611,7 +611,7 @@ Export and reporting features (e.g., PDF summaries) can be enabled in the main d
     # WHAT MAKES PATHFIND SPECIAL 
     # ------------------------------------------------------------
     with tabs[5]:
-        _section_title("What makes Pathfind special", "Design choices, performance, and limitations")
+        _section_title("What makes Pathfind special", "Design choices, performance, and future potential")
 
         row1a, row1b = st.columns([1, 1])
         with row1a:
@@ -686,17 +686,39 @@ Export and reporting features (e.g., PDF summaries) can be enabled in the main d
             )
 
         st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-
+        
         _mini_card(
-            "Limitations (important)",
-            _html_list(
-                [
-                    "<b>Aggregation:</b> many inputs are country-level averages and may hide city-level variation",
-                    "<b>Temporal validity:</b> prices, advisories, and indices can change over time",
-                    "<b>External dependency:</b> live features depend on availability and limits of external APIs",
-                    "<b>Routing:</b> planning tools are support tools and not full traffic-aware navigation engines",
-                    "<b>Interpretation:</b> safety and equality indicators are guidance signals, not guarantees of personal experience",
-                ]
+            "Future Potential",
+            (
+                "<div style='margin-bottom:10px;'>"
+                "Due to limited time and student resources, we focused on implementing the core features end-to-end and optimizing them for stability, performance, and explainability. "
+                "If we had more time and resources, we would expand Pathfind in the following areas:"
+                "</div>"
+
+                "<div style='font-weight:700; margin-top:10px; margin-bottom:6px;'>Granularity (country → city)</div>"
+                "<ul style='margin-top:0; line-height:1.9;'>"
+                "<li>City-level views in addition to country-level aggregates for more precise recommendations.</li>"
+                "<li>Better within-country differentiation (regional climates, costs, safety context).</li>"
+                "</ul>"
+
+                "<div style='font-weight:700; margin-top:10px; margin-bottom:6px;'>User accounts &amp; persistence</div>"
+                "<ul style='margin-top:0; line-height:1.9;'>"
+                "<li>User profiles with saved favorites, stored preferences, and trip plans across sessions.</li>"
+                "<li>Personal planning workspace (itineraries, notes, exports) tied to an account.</li>"
+                "</ul>"
+
+                "<div style='font-weight:700; margin-top:10px; margin-bottom:6px;'>Personas &amp; customization</div>"
+                "<ul style='margin-top:0; line-height:1.9;'>"
+                "<li>More variation in the persona library (additional archetypes + fine-grained subtypes).</li>"
+                "<li>Fully custom personas (saveable) created from user-defined weight templates.</li>"
+                "</ul>"
+
+                "<div style='font-weight:700; margin-top:10px; margin-bottom:6px;'>Chatbot expansion</div>"
+                "<ul style='margin-top:0; line-height:1.9;'>"
+                "<li>Generate personas from a short user chat (preferences → persona profile).</li>"
+                "<li>A chatbot that can chat over the full internal dataset (currently constrained by API cost limits).</li>"
+                "<li>More in-flow chat usage for planning (itinerary drafts, constraints, follow-up questions).</li>"
+                "</ul>"
             ),
         )
 

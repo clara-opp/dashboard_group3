@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from modules.visa_functions import render_visa_requirements
-from modules.info_boxes import render_weather_box, render_unesco_heritage_box
+from modules.info_boxes import render_weather_box, render_unesco_heritage_box, render_safety_box
 
 
 def render_country_overview(country, data_manager, openai_client, amadeus, amadeus_api_key, amadeus_api_secret, trip_planner_render=None):
@@ -38,12 +38,12 @@ def render_country_overview(country, data_manager, openai_client, amadeus, amade
     
     # Tabs for different sections
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📊 Overview", 
+        "Country Overview", 
         "💰 Budget Planner",
         "🗺️ Plan Trips",
         "✈️ Book Flights",
         "🌐 AI Assistant", 
-        "📄 Download PDF"
+        "Download PDF"
     ])
 
     tab_css = """
@@ -229,7 +229,6 @@ def render_hero_section(country):
 
 
 
-
 def render_overview_tab(country, data_manager):
     """Main overview with visual cards and personalized info"""
     
@@ -239,22 +238,31 @@ def render_overview_tab(country, data_manager):
     
     st.markdown("---")
     
-    # Visual Highlight Cards
-    st.markdown("### ✨ Key Highlights")
-    render_highlight_cards(country)
+    # Two tabs: Country Information & Requirements and Precautions
+    tab_info, tab_requirements = st.tabs(["📍 Country Information", "⚠️ Requirements and Precautions"])
     
-    render_weather_box(country, data_manager)
-
-    render_unesco_heritage_box(country, data_manager)
-
-    render_visa_requirements(country)
-
+    with tab_info:
+        # Visual Highlight Cards
+        st.markdown("### ✨ Key Highlights")
+        render_highlight_cards(country)
+        
+        render_weather_box(country, data_manager)
+        render_unesco_heritage_box(country, data_manager)
+    
+    with tab_requirements:
+        # Visa requirements first
+        render_visa_requirements(country)
+        
+        st.markdown("")
+        
+        # Safety information below
+        render_safety_box(country, data_manager)
+    
     st.markdown("---")
     
     # Just show the tip without the full Quick Reference section
     st.markdown("### 💡 Tip")
     st.success("Use our Budget Planner, Flight Planner and AI Assistant to plan your trip!")
-
 
 
 def render_match_reasons(country):
@@ -304,7 +312,7 @@ def render_highlight_cards(country):
     
     with col1:
         with st.container(border=True):
-            st.markdown("#### 💵 Budget")
+            st.markdown("#### Budget")
             col_idx = country.get('numbeo_cost_of_living_index', 50)
             # Invert for display: lower cost = higher bar
             budget_score = max(0, 150 - col_idx) / 150
@@ -320,7 +328,7 @@ def render_highlight_cards(country):
     
     with col2:
         with st.container(border=True):
-            st.markdown("#### 🏥 Healthcare")
+            st.markdown("#### Healthcare")
             
             # ✅ Use same logic as PDF - try multiple field names
             hc_raw = country.get('numbeo_healthcare_index')
@@ -357,7 +365,7 @@ def render_highlight_cards(country):
     
     with col3:
         with st.container(border=True):
-            st.markdown("#### 🌬️ Air Quality")
+            st.markdown("#### Air Quality")
             pol = country.get('numbeo_pollution_index', 50)
             air_score = max(0, 100 - pol)
             st.progress(air_score/100)
