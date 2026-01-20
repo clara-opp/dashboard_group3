@@ -1105,7 +1105,7 @@ def show_astro_step(data_manager):
         col1, col2 = st.columns(2, gap="large")
         
         with col1:
-            if st.button("🃏 DRAW CARD", key="draw_tarot", use_container_width=True):
+            if st.button("🃏 Draw travel tarot card", key="draw_tarot", use_container_width=True):
                 try:
                     api_key = os.getenv("ROXY_API_KEY")
                     tarot_url = "https://roxyapi.com/api/v1/data/astro/tarot"
@@ -1160,7 +1160,7 @@ def show_astro_step(data_manager):
                     st.error(f"Stars misaligned: {str(e)}")
 
         with col2:
-            if st.button("⏭️ SKIP", key="skip_tarot", use_container_width=True):
+            if st.button("Skip, let's keep it rational →", key="skip_tarot", use_container_width=True):
                 w = st.session_state.weights.copy()
                 w["astro"] = 0
                 st.session_state.weights = normalize_weights_100(w)
