@@ -828,7 +828,7 @@ def create_unified_database(output_db: str = "unified_country_database.db"):
         unified_df = unified_df.join(numbeo_indices_df, how="left")
 
     if not equality_index_df.empty:
-     unified_df = unified_df.join(equality_index_df, how="left")
+        unified_df = unified_df.join(equality_index_df, how="left")
 
     unified_df = unified_df.reset_index()
 
