@@ -54,12 +54,12 @@ def run_script(script_path, description):
             print(result.stdout)
         
         elapsed = time.time() - start_time
-        print(f"\n✅ SUCCESS ({elapsed:.1f}s)")
+        print(f"\n SUCCESS ({elapsed:.1f}s)")
         return True
         
     except subprocess.CalledProcessError as e:
         elapsed = time.time() - start_time
-        print(f"\n❌ FAILED ({elapsed:.1f}s)")
+        print(f"\n FAILED ({elapsed:.1f}s)")
         print(f"\nError output:")
         if e.stderr:
             print(e.stderr)
@@ -69,7 +69,7 @@ def run_script(script_path, description):
     
     except Exception as e:
         elapsed = time.time() - start_time
-        print(f"\n❌ FAILED ({elapsed:.1f}s)")
+        print(f"\n FAILED ({elapsed:.1f}s)")
         print(f"Exception: {e}")
         return False
 
@@ -98,7 +98,7 @@ def main():
     
     # Start
     overall_start = time.time()
-    print_header("🌍 DATABASE UPDATE AUTOMATION")
+    print_header(" DATABASE UPDATE AUTOMATION")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     results = {}
@@ -111,10 +111,10 @@ def main():
                 "TuGo Travel Warnings API"
             )
         else:
-            print(f"⚠️  Warning: {TUGO_SCRIPT} not found, skipping")
+            print(f"  Warning: {TUGO_SCRIPT} not found, skipping")
             results["TuGo API"] = "skipped"
     else:
-        print_header("⏭️  Skipping TuGo API (--skip-tugo or --skip-apis)")
+        print_header("  Skipping TuGo API (--skip-tugo or --skip-apis)")
         results["TuGo API"] = "skipped"
     
     # Step 2: Foreign Office API
@@ -125,10 +125,10 @@ def main():
                 "German Foreign Office Travel Warnings"
             )
         else:
-            print(f"⚠️  Warning: {FOREIGN_OFFICE_SCRIPT} not found, skipping")
+            print(f"  Warning: {FOREIGN_OFFICE_SCRIPT} not found, skipping")
             results["Foreign Office API"] = "skipped"
     else:
-        print_header("⏭️  Skipping Foreign Office API (--skip-foreign-office or --skip-apis)")
+        print_header("  Skipping Foreign Office API (--skip-foreign-office or --skip-apis)")
         results["Foreign Office API"] = "skipped"
     
     # Step 3: Numbeo Update (indices + exchange rates)
@@ -139,7 +139,7 @@ def main():
                 "Numbeo Update (indices + exchange rates)"
             )
         else:
-            print(f"⚠️  Warning: {NUMBEO_UPDATE_SCRIPT} not found, skipping")
+            print(f"  Warning: {NUMBEO_UPDATE_SCRIPT} not found, skipping")
             results["Numbeo Update"] = "skipped"
     else:
         print_header("⏭️  Skipping Numbeo Update (--skip-apis)")
@@ -153,31 +153,31 @@ def main():
             "Database Builder (database_final.py)"
         )
     else:
-        print(f"❌ Error: {DATABASE_SCRIPT} not found!")
+        print(f" Error: {DATABASE_SCRIPT} not found!")
         results["Database Build"] = False
     
     # Summary
     overall_time = time.time() - overall_start
-    print_header("📊 EXECUTION SUMMARY")
+    print_header(" EXECUTION SUMMARY")
     print(f"Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Total time: {overall_time / 60:.1f} minutes ({overall_time:.1f}s)\n")
     
     print("Results:")
     for step, result in results.items():
         if result == "skipped":
-            status = "⏭️  SKIPPED"
+            status = "  SKIPPED"
         elif result:
-            status = "✅ SUCCESS"
+            status = " SUCCESS"
         else:
-            status = "❌ FAILED"
+            status = " FAILED"
         print(f"  {status}  {step}")
     
     # Exit code
     if any(result is False for result in results.values()):
-        print("\n⚠️  Some steps failed. Check logs above.")
+        print("\n  Some steps failed. Check logs above.")
         sys.exit(1)
     else:
-        print("\n🎉 All steps completed successfully!")
+        print("\n All steps completed successfully!")
         sys.exit(0)
 
 if __name__ == "__main__":
