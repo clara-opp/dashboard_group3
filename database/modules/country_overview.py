@@ -40,10 +40,10 @@ def render_country_overview(country, data_manager, openai_client, amadeus, amade
     # Tabs for different sections
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Country Overview", 
+        "🌐 AI Assistant", 
         "💰 Budget Planner",
         "🗺️ Plan Trips",
         "✈️ Book Flights",
-        "🌐 AI Assistant", 
         "Download PDF"
     ])
 
@@ -114,13 +114,16 @@ def render_country_overview(country, data_manager, openai_client, amadeus, amade
         render_overview_tab(country, data_manager)
     
     with tab2:
+        render_chatbot_tab(country, openai_client, data_manager)
+    
+    with tab3:
         render_budget_tab(country, data_manager)
 
-    with tab3:
+    with tab4:
         if trip_planner_render:
             trip_planner_render()
     
-    with tab4:
+    with tab5:
         # Import existing flight search - KEEP INLINE
         from modules.flight_search import render_flight_search
         iso3 = country.get('iso3') or "NA"
@@ -137,9 +140,6 @@ def render_country_overview(country, data_manager, openai_client, amadeus, amade
             image_urls=(country.get('img_1'), country.get('img_2'), country.get('img_3')),
             key_prefix=f"fs_{iso3}"
         )
-    
-    with tab5:
-        render_chatbot_tab(country, openai_client, data_manager)
     
     with tab6:
         render_pdf_tab(country, data_manager)
@@ -251,7 +251,10 @@ def render_overview_tab(country, data_manager):
         st.markdown("### ✨ Key Highlights")
         render_highlight_cards(country)
         
-        render_weather_box(country, data_manager)
+        #Load data for match reasons
+        weather_data = render_weather_box(country, data_manager)
+        st.session_state["weather_data"] = weather_data
+
         render_unesco_heritage_box(country, data_manager)
     
     with tab_requirements:
@@ -294,11 +297,14 @@ def render_match_reasons(country):
             reasons.append("🌬️ **Clean air quality** - Low pollution levels")
     
     # Based on swipe preferences
-    prefs = st.session_state.get('prefs', {})
-    target_temp = prefs.get('target_temp', 25)
-    actual_temp = country.get('climate_avg_temp_c')
-    if actual_temp and abs(target_temp - actual_temp) < 5:
-        reasons.append(f"🌡️ **Perfect weather** - {actual_temp:.0f}°C matches your preference")
+    prefs = st.session_state.get("prefs", {})
+    targettemp = float(prefs.get("targettemp", 25) or 25)
+
+    weather = st.session_state.get("weather_data") or {}
+    actualtemp = weather.get("temperature_daytime")
+
+    if actualtemp is not None and abs(targettemp - float(actualtemp)) < 5:
+        reasons.append(f"🌡️ **Perfect weather** - {float(actualtemp):.0f}°C matches your preference")
     
     # Based on tarot
     if tarot and country.get('iso3') in st.session_state.get('tarot_boosted_countries', []):
