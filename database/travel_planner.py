@@ -1105,7 +1105,7 @@ def show_astro_step(data_manager):
         col1, col2 = st.columns(2, gap="large")
         
         with col1:
-            if st.button("🃏 DRAW CARD", key="draw_tarot", use_container_width=True):
+            if st.button("🃏 Draw travel tarot card", key="draw_tarot", use_container_width=True):
                 try:
                     api_key = os.getenv("ROXY_API_KEY")
                     tarot_url = "https://roxyapi.com/api/v1/data/astro/tarot"
@@ -1160,7 +1160,7 @@ def show_astro_step(data_manager):
                     st.error(f"Stars misaligned: {str(e)}")
 
         with col2:
-            if st.button("⏭️ SKIP", key="skip_tarot", use_container_width=True):
+            if st.button("Skip, let's keep it rational →", key="skip_tarot", use_container_width=True):
                 w = st.session_state.weights.copy()
                 w["astro"] = 0
                 st.session_state.weights = normalize_weights_100(w)
@@ -1317,12 +1317,28 @@ def show_ban_list_step(data_manager):
 def show_results_step(data_manager):
     """Show results with Start Over button TOP RIGHT ONLY (no emoji, no back)"""
     
-    # TOP NAV: Start Over (RIGHT ONLY)
-    nav_spacer, nav_col2 = st.columns([0.85, 0.15])
-    
-    with nav_col2:
-        if st.button("Start Over", key="results_start_over", use_container_width=True, help="Reset and begin again"):
-            st.session_state.step=1
+    # Include back and restart
+    nav_col_left, nav_spacer, nav_col_right = st.columns([0.18, 0.64, 0.18])
+
+    with nav_col_left:
+        if st.button(
+            "Back to Ban List",
+            key="results_back_to_banlist",
+            use_container_width=True,
+            help="Adjust banned regions and recalculate matches"
+        ):
+            # No reset, just back to ban
+            st.session_state.step = 5.1 
+            st.rerun()
+
+    with nav_col_right:
+        if st.button(
+            "Start Over",
+            key="results_start_over",
+            use_container_width=True,
+            help="Reset and begin again"
+        ):
+            st.session_state.step = 1
             st.rerun()
     
     # Main content
