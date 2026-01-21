@@ -40,10 +40,10 @@ def render_country_overview(country, data_manager, openai_client, amadeus, amade
     # Tabs for different sections
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Country Overview", 
+        "🌐 AI Assistant", 
         "💰 Budget Planner",
         "🗺️ Plan Trips",
         "✈️ Book Flights",
-        "🌐 AI Assistant", 
         "Download PDF"
     ])
 
