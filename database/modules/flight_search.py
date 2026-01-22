@@ -319,7 +319,7 @@ def render_flight_search(
     if flight_results is not None and ("error_code" in flight_results or "errors" in flight_results):
         err_str = str(flight_results)
         if "500" in err_str:
-            st.warning("✈️ The flight search service is temporarily unavailable. We apologize for the inconvenience. Please try again later.")
+            st.warning("✈️ The flight search service is temporarily unavailable. We apologize for the inconvenience. Please try again later. Click here for more information: https://developers.amadeus.com/")
         else:
             st.error(f"Flight search failed: {flight_results.get('detail', 'Unknown Error')}")
         return
