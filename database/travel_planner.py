@@ -807,7 +807,7 @@ def render_intro_box():
         <div class="pf-intro">
             <h3>Welcome to Pathfind — Let’s find your path.</h3>
             <p>
-                Pathfind helps you discover destinations that match your travel style — based on safety, costs,
+                Pathfind helps you discover destinations that match your travel style: based on safety, costs,
                 weather, culture, and more. Follow the buttons at the bottom and explore your top matches.
             </p>
         </div>
