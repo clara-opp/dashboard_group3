@@ -1414,7 +1414,7 @@ def show_results_step(data_manager):
                 st.info(f"🚫 Filtered out {beforecount - aftercount} destinations from banned regions.")
 
         if all_continents_banned:
-            st.info("🏝️ We do not have any travel destinations outside of this earth, but maybe you like one of the following islands. If you want to skip the algorithm entirely, just select your country of choice here.")
+            st.info("🏝️ Congratulations, you found an Easter Egg! We do not have any travel destinations outside of this earth, but maybe you like one of the following islands. If you want to skip the algorithm entirely, just select your country of choice here.")
             
             # Load all countries from database
             conn = data_manager.get_connection()
